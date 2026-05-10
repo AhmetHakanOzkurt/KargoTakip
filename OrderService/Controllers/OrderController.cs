@@ -17,19 +17,21 @@ namespace OrderService.Controllers
         private readonly KargoTakipDbContext _context;
         private readonly RabbitMqProducer _producer;
         private readonly ILogger<OrderController> _logger;
-
         private readonly IValidator<CreateShipmentRequest> _validator;
+        private readonly IConfiguration _configuration;
 
         public OrderController(
             KargoTakipDbContext context,
             RabbitMqProducer producer,
             ILogger<OrderController> logger,
-            IValidator<CreateShipmentRequest> validator)
+            IValidator<CreateShipmentRequest> validator,
+            IConfiguration configuration)
         {
             _context = context;
             _producer = producer;
             _logger = logger;
             _validator = validator;
+            _configuration = configuration;
         }
 
         // Tüm kargoları listele
@@ -231,8 +233,11 @@ namespace OrderService.Controllers
 
                 var httpClient2 = new HttpClient(handler);
 
+                var vehicleServiceUrl = _configuration["VehicleService:BaseUrl"]
+    ?? "https://localhost:7139";
+
                 var response = await httpClient2.PostAsJsonAsync(
-                    "https://localhost:7139/api/vehicles/assign",
+                    $"{vehicleServiceUrl}/api/vehicles/assign",
                     assignRequest
                 );
 

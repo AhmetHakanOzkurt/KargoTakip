@@ -16,8 +16,8 @@ namespace KargoTakip.Infrastructure.Data
             var optionsBuilder = new DbContextOptionsBuilder<KargoTakipDbContext>();
 
             optionsBuilder.UseSqlServer(
-                @"Server=.\SQLEXPRESS;Database=KargoTakipDB;Trusted_Connection=True;TrustServerCertificate=True;"
-            );
+    "Server=localhost,1433;Database=KargoTakipDB;User Id=sa;Password=KargoTakip123!;TrustServerCertificate=True;"
+);
 
             return new KargoTakipDbContext(optionsBuilder.Options);
         }

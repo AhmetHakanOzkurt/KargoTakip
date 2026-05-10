@@ -26,10 +26,28 @@ namespace NotificationService.Messaging
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
             var hostName = _configuration["RabbitMQ:HostName"] ?? "localhost";
-            var factory = new ConnectionFactory { HostName = hostName };
 
-            _connection = await factory.CreateConnectionAsync(stoppingToken);
+            // RabbitMQ hazır olana kadar bekle
+            IConnection? connection = null;
+            while (connection == null && !stoppingToken.IsCancellationRequested)
+            {
+                try
+                {
+                    var factory = new ConnectionFactory { HostName = hostName };
+                    connection = await factory.CreateConnectionAsync(stoppingToken);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"RabbitMQ bağlantısı kurulamadı, 5 saniye sonra tekrar deneniyor: {ex.Message}");
+                    await Task.Delay(5000, stoppingToken);
+                }
+            }
+
+            if (connection == null) return;
+
+            _connection = connection;
             _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
+           
 
             // Kuyrukları tanımla
             await _channel.QueueDeclareAsync(

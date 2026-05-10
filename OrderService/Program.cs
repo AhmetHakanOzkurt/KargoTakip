@@ -74,15 +74,17 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
-builder.Services.AddSingleton<OrderService.Messaging.RabbitMqProducer>();
+builder.Services.AddSingleton(sp =>
+{
+    var config = sp.GetRequiredService<IConfiguration>();
+    var hostName = config["RabbitMQ:HostName"] ?? "localhost";
+    return new OrderService.Messaging.RabbitMqProducer(hostName);
+});
 
 var app = builder.Build();
 
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
+app.UseSwagger();
+app.UseSwaggerUI();
 
 app.UseMiddleware<OrderService.Middleware.ExceptionHandlingMiddleware>();
 app.UseAuthentication();
