@@ -38,11 +38,22 @@ namespace OrderService.Controllers
         [HttpGet]
         public async Task<IActionResult> GetAll()
         {
-            var shipments = await _context.Shipments
+            var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var branchIdClaim = User.FindFirst("branchId")?.Value;
+            int.TryParse(branchIdClaim, out int userBranchId);
+
+            var query = _context.Shipments
                 .Include(s => s.ReceiverCity)
                 .Include(s => s.Branch)
                 .Include(s => s.CreatedByUser)
                 .Include(s => s.AssignedVehicle)
+                .AsQueryable();
+
+            // Admin her şeyi görür, diğerleri sadece kendi şubesini
+            if (role != "Admin")
+                query = query.Where(s => s.BranchId == userBranchId);
+
+            var shipments = await query
                 .Select(s => new
                 {
                     s.Id,
@@ -55,7 +66,8 @@ namespace OrderService.Controllers
                     s.Priority,
                     s.CurrentStatus,
                     Branch = s.Branch.Name,
-                    AssignedVehicle = s.AssignedVehicle != null ? s.AssignedVehicle.PlateNumber : null,
+                    AssignedVehicle = s.AssignedVehicle != null
+                        ? s.AssignedVehicle.PlateNumber : null,
                     CreatedBy = s.CreatedByUser.FullName,
                     s.CreatedAt
                 })
@@ -68,6 +80,10 @@ namespace OrderService.Controllers
         [HttpGet("{id}")]
         public async Task<IActionResult> GetById(int id)
         {
+            var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            var branchIdClaim = User.FindFirst("branchId")?.Value;
+            int.TryParse(branchIdClaim, out int userBranchId);
+
             var shipment = await _context.Shipments
                 .Include(s => s.ReceiverCity)
                 .Include(s => s.Branch)
@@ -75,6 +91,7 @@ namespace OrderService.Controllers
                 .Include(s => s.AssignedVehicle)
                 .Include(s => s.StatusHistories)
                 .Where(s => s.Id == id)
+                .Where(s => role == "Admin" || s.BranchId == userBranchId)
                 .Select(s => new
                 {
                     s.Id,
@@ -87,7 +104,8 @@ namespace OrderService.Controllers
                     s.Priority,
                     s.CurrentStatus,
                     Branch = s.Branch.Name,
-                    AssignedVehicle = s.AssignedVehicle != null ? s.AssignedVehicle.PlateNumber : null,
+                    AssignedVehicle = s.AssignedVehicle != null
+                        ? s.AssignedVehicle.PlateNumber : null,
                     CreatedBy = s.CreatedByUser.FullName,
                     s.CreatedAt,
                     s.UpdatedAt,

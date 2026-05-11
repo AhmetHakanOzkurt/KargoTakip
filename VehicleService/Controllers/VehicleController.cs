@@ -156,6 +156,75 @@ namespace VehicleService.Controllers
             });
         }
 
+        // Tüm şubelerin doluluk özeti
+        [HttpGet("branch-summary")]
+        public async Task<IActionResult> GetBranchSummary()
+        {
+            var summary = await _context.Branches
+                .Where(b => b.IsActive)
+                .Select(b => new
+                {
+                    SubeId = b.Id,
+                    SubeAdi = b.Name,
+                    Sehir = b.City.Name,
+                    ToplamArac = b.Vehicles.Count(),
+                    MüsaitArac = b.Vehicles.Count(v => v.IsAvailable),
+                    MesgulArac = b.Vehicles.Count(v => !v.IsAvailable),
+                    ToplamKapasite = b.Vehicles.Sum(v => v.Capacity),
+                    ToplamYuk = b.Vehicles.Sum(v => v.CurrentLoad),
+                    DolulukOrani = b.Vehicles.Any()
+                        ? (int)Math.Round(
+                            (double)b.Vehicles.Sum(v => v.CurrentLoad) /
+                            b.Vehicles.Sum(v => v.Capacity) * 100)
+                        : 0,
+                    AktifKargo = b.Shipments
+                        .Count(s => s.CurrentStatus != "Teslim Edildi")
+                })
+                .OrderBy(b => b.SubeAdi)
+                .ToListAsync();
+
+            return Ok(summary);
+        }
+
+        // Belirli bir şubenin detaylı araç durumu
+        [HttpGet("branch/{branchId}")]
+        public async Task<IActionResult> GetByBranch(int branchId)
+        {
+            var branch = await _context.Branches.FindAsync(branchId);
+            if (branch == null)
+                return NotFound(new { message = "Şube bulunamadı." });
+
+            var vehicles = await _context.Vehicles
+                .Include(v => v.VehicleType)
+                .Include(v => v.City)
+                .Where(v => v.BranchId == branchId)
+                .Select(v => new
+                {
+                    v.Id,
+                    v.PlateNumber,
+                    Tip = v.VehicleType.Name,
+                    RotaTipi = v.VehicleType.RouteType,
+                    v.Capacity,
+                    v.CurrentLoad,
+                    KalanKapasite = v.Capacity - v.CurrentLoad,
+                    DolulukOrani = v.Capacity > 0
+                        ? (int)Math.Round(
+                            (double)v.CurrentLoad / v.Capacity * 100)
+                        : 0,
+                    v.IsAvailable,
+                    BulunduguSehir = v.City.Name
+                })
+                .OrderBy(v => v.DolulukOrani)
+                .ToListAsync();
+
+            return Ok(new
+            {
+                subeId = branchId,
+                subeAdi = branch.Name,
+                araclar = vehicles
+            });
+        }
+
         // Araç ata — OrderService tarafından çağrılacak
         [AllowAnonymous]
         [HttpPost("assign")]
