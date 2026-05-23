@@ -120,6 +120,30 @@ services:
     networks:
       - kargo-network
 
+  consolidation-service:
+    build:
+      context: .
+      dockerfile: ConsolidationService/Dockerfile
+    ports:
+      - "5006:8080"
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=KargoTakip123!;TrustServerCertificate=True;
+      - JwtSettings__SecretKey=bu-cok-gizli-bir-anahtar-en-az-32-karakter-olmali
+      - JwtSettings__Issuer=KargoTakip
+      - JwtSettings__Audience=KargoTakipUsers
+      - JwtSettings__ExpiryInHours=8
+      - RabbitMQ__HostName=rabbitmq
+      - Consolidation__OccupancyThreshold=70
+      - Consolidation__MaxWaitHours=48
+      - Consolidation__CheckIntervalMinutes=60
+    depends_on:
+      rabbitmq:
+        condition: service_healthy
+      sqlserver:
+        condition: service_started
+    networks:
+      - kargo-network
+
 networks:
   kargo-network:
     driver: bridge
