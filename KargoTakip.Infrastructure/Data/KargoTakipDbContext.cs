@@ -23,6 +23,9 @@ namespace KargoTakip.Infrastructure.Data
         public DbSet<TransferRequest> TransferRequests { get; set; }
         public DbSet<TransferRequestItem> TransferRequestItems { get; set; }
         public DbSet<Notification> Notifications { get; set; }
+        public DbSet<CityDistance> CityDistances { get; set; }
+        public DbSet<ConsolidationPlan> ConsolidationPlans { get; set; }
+        public DbSet<ConsolidationPlanItem> ConsolidationPlanItems { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -151,6 +154,64 @@ namespace KargoTakip.Infrastructure.Data
                 .WithMany(b => b.Users)
                 .HasForeignKey(u => u.BranchId)
                 .OnDelete(DeleteBehavior.Restrict);
+
+            // CityDistance ilişkileri
+            modelBuilder.Entity<CityDistance>()
+                .HasOne(cd => cd.FromCity)
+                .WithMany()
+                .HasForeignKey(cd => cd.FromCityId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<CityDistance>()
+                .HasOne(cd => cd.ToCity)
+                .WithMany()
+                .HasForeignKey(cd => cd.ToCityId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<CityDistance>()
+                .Property(cd => cd.EstimatedHours)
+                .HasPrecision(4, 1);
+
+            // ConsolidationPlan ilişkileri
+            modelBuilder.Entity<ConsolidationPlan>()
+                .HasOne(cp => cp.Vehicle)
+                .WithMany()
+                .HasForeignKey(cp => cp.VehicleId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ConsolidationPlan>()
+                .HasOne(cp => cp.OriginBranch)
+                .WithMany()
+                .HasForeignKey(cp => cp.OriginBranchId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ConsolidationPlan>()
+                .HasOne(cp => cp.DestinationCity)
+                .WithMany()
+                .HasForeignKey(cp => cp.DestinationCityId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // ConsolidationPlanItem ilişkileri
+            modelBuilder.Entity<ConsolidationPlanItem>()
+                .HasOne(cpi => cpi.ConsolidationPlan)
+                .WithMany(cp => cp.Items)
+                .HasForeignKey(cpi => cpi.ConsolidationPlanId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ConsolidationPlanItem>()
+                .HasOne(cpi => cpi.Shipment)
+                .WithMany()
+                .HasForeignKey(cpi => cpi.ShipmentId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // OccupancyRate ve EstimatedFuelSaving hassasiyeti
+            modelBuilder.Entity<ConsolidationPlan>()
+                .Property(cp => cp.OccupancyRate)
+                .HasPrecision(5, 2);
+
+            modelBuilder.Entity<ConsolidationPlan>()
+                .Property(cp => cp.EstimatedFuelSaving)
+                .HasPrecision(10, 2);
         }
     }
 }
