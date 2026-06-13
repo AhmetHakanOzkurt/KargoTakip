@@ -23,6 +23,11 @@ namespace KargoTakip.Infrastructure.Models
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
         public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
 
+        public string? ReceiverEmail { get; set; }
+        public string? DeliveryCode { get; set; }
+        public DateTime? DeliveryCodeExpiry { get; set; }
+        public bool DeliveryCodeUsed { get; set; } = false;
+
         public City ReceiverCity { get; set; } = null!;
         public Branch Branch { get; set; } = null!;
         public Vehicle? AssignedVehicle { get; set; }

@@ -23,6 +23,18 @@ builder.Services.Configure<IpRateLimitPolicies>(
 builder.Services.AddInMemoryRateLimiting();
 builder.Services.AddSingleton<IRateLimitConfiguration, RateLimitConfiguration>();
 
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowDashboard", policy =>
+    {
+        policy.WithOrigins(
+            "http://localhost:3000",
+            "http://localhost:5173")
+            .AllowAnyHeader()
+            .AllowAnyMethod();
+    });
+});
+
 builder.Services.AddControllers();
 builder.Services.AddValidatorsFromAssemblyContaining<AuthService.Validators.LoginRequestValidator>();
 builder.Services.AddEndpointsApiExplorer();
@@ -62,6 +74,7 @@ app.UseSwaggerUI();
 
 app.UseIpRateLimiting();
 app.UseMiddleware<AuthService.Middleware.ExceptionHandlingMiddleware>();
+app.UseCors("AllowDashboard");
 app.UseAuthorization();
 app.MapControllers();
 app.Run();

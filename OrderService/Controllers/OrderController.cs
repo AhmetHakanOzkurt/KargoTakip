@@ -136,6 +136,20 @@ namespace OrderService.Controllers
             shipment.CurrentStatus = request.NewStatus;
             shipment.UpdatedAt = DateTime.UtcNow;
 
+            // Dağıtıma çıkınca teslimat kodu üret
+            if (request.NewStatus == "Dağıtımda" && string.IsNullOrEmpty(shipment.DeliveryCode))
+            {
+                shipment.DeliveryCode = GenerateDeliveryCode();
+                shipment.DeliveryCodeExpiry = DateTime.UtcNow.AddHours(24);
+                shipment.DeliveryCodeUsed = false;
+            }
+
+            // Teslim edilince kodu kullanıldı işaretle
+            if (request.NewStatus == "Teslim Edildi")
+            {
+                shipment.DeliveryCodeUsed = true;
+            }
+
             var statusHistory = new ShipmentStatusHistory
             {
                 ShipmentId = shipment.Id,
@@ -149,7 +163,6 @@ namespace OrderService.Controllers
             _context.ShipmentStatusHistories.Add(statusHistory);
             await _context.SaveChangesAsync();
 
-            // RabbitMQ'ya event yayınla
             var durumuGuncellendiEvent = new KargoDurumuGuncellendiEvent
             {
                 ShipmentId = shipment.Id,
@@ -157,7 +170,10 @@ namespace OrderService.Controllers
                 EskiDurum = eskiDurum,
                 YeniDurum = request.NewStatus,
                 BranchId = shipment.BranchId,
-                GuncellemeTarihi = DateTime.UtcNow
+                GuncellemeTarihi = DateTime.UtcNow,
+                ReceiverEmail = shipment.ReceiverEmail,
+                ReceiverName = shipment.ReceiverName,
+                DeliveryCode = shipment.DeliveryCode
             };
 
             await _producer.PublishAsync("kargo_durumu_guncellendi", durumuGuncellendiEvent);
@@ -168,9 +184,76 @@ namespace OrderService.Controllers
                 shipment.TrackingCode,
                 eskiDurum,
                 yeniDurum = request.NewStatus,
+                deliveryCode = shipment.DeliveryCode,
                 message = "Durum güncellendi."
             });
         }
+
+        private string GenerateDeliveryCode()
+        {
+            var random = new Random();
+            return random.Next(100000, 999999).ToString();
+        }
+
+        [HttpPut("{id}/deliver")]
+        public async Task<IActionResult> Deliver(int id, [FromBody] DeliverRequest request)
+        {
+            var shipment = await _context.Shipments.FindAsync(id);
+            if (shipment == null)
+                return NotFound(new { message = "Kargo bulunamadı." });
+
+            if (shipment.CurrentStatus == "Teslim Edildi")
+                return BadRequest(new { message = "Bu kargo zaten teslim edildi." });
+
+            if (string.IsNullOrEmpty(shipment.DeliveryCode))
+                return BadRequest(new { message = "Bu kargo için teslimat kodu oluşturulmamış." });
+
+            if (shipment.DeliveryCodeUsed)
+                return BadRequest(new { message = "Teslimat kodu daha önce kullanıldı." });
+
+            if (shipment.DeliveryCodeExpiry < DateTime.UtcNow)
+                return BadRequest(new { message = "Teslimat kodunun süresi dolmuş." });
+
+            if (shipment.DeliveryCode != request.DeliveryCode)
+                return BadRequest(new { message = "Teslimat kodu hatalı." });
+
+            shipment.CurrentStatus = "Teslim Edildi";
+            shipment.DeliveryCodeUsed = true;
+            shipment.UpdatedAt = DateTime.UtcNow;
+
+            var statusHistory = new ShipmentStatusHistory
+            {
+                ShipmentId = shipment.Id,
+                Status = "Teslim Edildi",
+                Note = "Teslimat kodu doğrulandı.",
+                ServiceSource = "CourierApp",
+                ChangedAt = DateTime.UtcNow,
+                ChangedByUserId = request.ChangedByUserId
+            };
+
+            _context.ShipmentStatusHistories.Add(statusHistory);
+            await _context.SaveChangesAsync();
+
+            var durumuGuncellendiEvent = new KargoDurumuGuncellendiEvent
+            {
+                ShipmentId = shipment.Id,
+                TrackingCode = shipment.TrackingCode,
+                EskiDurum = "Dağıtımda",
+                YeniDurum = "Teslim Edildi",
+                BranchId = shipment.BranchId,
+                GuncellemeTarihi = DateTime.UtcNow,
+                ReceiverEmail = shipment.ReceiverEmail,
+                ReceiverName = shipment.ReceiverName,
+                DeliveryCode = shipment.DeliveryCode
+            };
+
+            await _producer.PublishAsync("kargo_durumu_guncellendi", durumuGuncellendiEvent);
+
+            _logger.LogInformation("Kargo teslim edildi: {TrackingCode}", shipment.TrackingCode);
+
+            return Ok(new { message = "Kargo başarıyla teslim edildi.", shipment.TrackingCode });
+        }
+
 
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateShipmentRequest request)
@@ -214,7 +297,8 @@ namespace OrderService.Controllers
                 BranchId = request.BranchId,
                 CreatedByUserId = request.CreatedByUserId,
                 CreatedAt = DateTime.UtcNow,
-                UpdatedAt = DateTime.UtcNow
+                UpdatedAt = DateTime.UtcNow,
+                ReceiverEmail = request.ReceiverEmail
             };
 
             _context.Shipments.Add(shipment);
@@ -313,6 +397,7 @@ namespace OrderService.Controllers
         public string? Priority { get; set; }
         public int BranchId { get; set; }
         public int CreatedByUserId { get; set; }
+        public string? ReceiverEmail { get; set; }
     }
 
     public class UpdateStatusRequest
@@ -326,5 +411,10 @@ namespace OrderService.Controllers
     {
         public int VehicleId { get; set; }
         public string PlateNumber { get; set; } = string.Empty;
+    }
+    public class DeliverRequest
+    {
+        public string DeliveryCode { get; set; } = string.Empty;
+        public int ChangedByUserId { get; set; }
     }
 }

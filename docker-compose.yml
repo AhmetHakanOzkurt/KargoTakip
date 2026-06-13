@@ -95,6 +95,11 @@ services:
       - JwtSettings__Audience=KargoTakipUsers
       - JwtSettings__ExpiryInHours=8
       - RabbitMQ__HostName=rabbitmq
+      - EmailSettings__FromEmail=ahmethakanozkurt@gmail.com
+      - EmailSettings__FromName=KargoTakip
+      - EmailSettings__SmtpHost=smtp.gmail.com
+      - EmailSettings__SmtpPort=587
+      - EmailSettings__Password=guhlywhtgnicawud
     depends_on:
       rabbitmq:
         condition: service_healthy
@@ -141,6 +146,17 @@ services:
         condition: service_healthy
       sqlserver:
         condition: service_started
+    networks:
+      - kargo-network
+   
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    ports:
+      - "3000:80"
+    environment:
+      - REACT_APP_API_BASE=http://localhost
     networks:
       - kargo-network
 

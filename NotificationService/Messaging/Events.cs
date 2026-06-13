@@ -18,5 +18,8 @@
         public string YeniDurum { get; set; } = string.Empty;
         public int BranchId { get; set; }
         public DateTime GuncellemeTarihi { get; set; }
+        public string? ReceiverEmail { get; set; }
+        public string? ReceiverName { get; set; }
+        public string? DeliveryCode { get; set; }
     }
 }

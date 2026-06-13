@@ -19,6 +19,18 @@ namespace ReportService
             var builder = WebApplication.CreateBuilder(args);
             builder.Host.UseSerilog();
 
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowDashboard", policy =>
+                {
+                    policy.WithOrigins(
+                        "http://localhost:3000",
+                        "http://localhost:5173")
+                        .AllowAnyHeader()
+                        .AllowAnyMethod();
+                });
+            });
+
             builder.Services.AddControllers()
                 .AddJsonOptions(options =>
                 {
@@ -83,7 +95,7 @@ namespace ReportService
 
             app.UseSwagger();
             app.UseSwaggerUI();
-
+            app.UseCors("AllowDashboard");
             app.UseAuthentication();
             app.UseAuthorization();
             app.MapControllers();

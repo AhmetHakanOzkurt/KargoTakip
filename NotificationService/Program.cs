@@ -20,6 +20,18 @@ namespace NotificationService
             var builder = WebApplication.CreateBuilder(args);
             builder.Host.UseSerilog();
 
+            builder.Services.AddCors(options =>
+            {
+                options.AddPolicy("AllowDashboard", policy =>
+                {
+                    policy.WithOrigins(
+                        "http://localhost:3000",
+                        "http://localhost:5173")
+                        .AllowAnyHeader()
+                        .AllowAnyMethod();
+                });
+            });
+
             builder.Services.AddControllers()
                 .AddJsonOptions(options =>
                 {
@@ -79,6 +91,7 @@ namespace NotificationService
                 });
 
             builder.Services.AddAuthorization();
+            builder.Services.AddSingleton<NotificationService.Services.EmailService>();
 
             // RabbitMQ Consumer arka planda çalýþacak
             builder.Services.AddHostedService<RabbitMqConsumer>();
@@ -87,7 +100,7 @@ namespace NotificationService
 
             app.UseSwagger();
             app.UseSwaggerUI();
-
+            app.UseCors("AllowDashboard");
             app.UseAuthentication();
             app.UseAuthorization();
             app.MapControllers();

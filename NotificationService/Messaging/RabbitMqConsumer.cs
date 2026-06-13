@@ -1,6 +1,7 @@
 ﻿using KargoTakip.Infrastructure.Data;
 using KargoTakip.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
+using NotificationService.Services;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
 using System.Text;
@@ -12,15 +13,18 @@ namespace NotificationService.Messaging
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IConfiguration _configuration;
+        private readonly EmailService _emailService;
         private IConnection? _connection;
         private IChannel? _channel;
 
         public RabbitMqConsumer(
             IServiceScopeFactory scopeFactory,
-            IConfiguration configuration)
+            IConfiguration configuration,
+            EmailService emailService)
         {
             _scopeFactory = scopeFactory;
             _configuration = configuration;
+            _emailService = emailService;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -176,7 +180,19 @@ namespace NotificationService.Messaging
             context.Notifications.Add(notification);
             await context.SaveChangesAsync();
 
-            Console.WriteLine($"Bildirim oluşturuldu: {notification.Message}");
+            // Mail gönder
+            if (!string.IsNullOrEmpty(ev.ReceiverEmail))
+            {
+                await _emailService.SendShipmentStatusEmailAsync(
+                    ev.ReceiverEmail,
+                    ev.ReceiverName ?? "Değerli Müşterimiz",
+                    ev.TrackingCode,
+                    ev.YeniDurum,
+                    ev.DeliveryCode
+                );
+            }
+
+            Console.WriteLine($"Bildirim oluşturuldu: {message}");
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)
