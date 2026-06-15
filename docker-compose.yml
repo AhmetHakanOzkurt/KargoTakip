@@ -95,11 +95,11 @@ services:
       - JwtSettings__Audience=KargoTakipUsers
       - JwtSettings__ExpiryInHours=8
       - RabbitMQ__HostName=rabbitmq
-      - EmailSettings__FromEmail=ahmethakanozkurt@gmail.com
+      - EmailSettings__FromEmail=ahmethakanozkurt2909@gmail.com
       - EmailSettings__FromName=KargoTakip
       - EmailSettings__SmtpHost=smtp.gmail.com
       - EmailSettings__SmtpPort=587
-      - EmailSettings__Password=guhlywhtgnicawud
+      - EmailSettings__Password=scafqjjtucuyzpaf
     depends_on:
       rabbitmq:
         condition: service_healthy
