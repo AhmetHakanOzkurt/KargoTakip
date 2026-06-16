@@ -48,6 +48,48 @@ namespace NotificationService.Services
             }
         }
 
+        public async Task SendOrderCreatedEmailAsync(
+        string toEmail, string toName, string trackingCode)
+        {
+            var subject = $"📦 Kargonuz Oluşturuldu — {trackingCode}";
+            var htmlBody = $@"
+            <!DOCTYPE html>
+            <html>
+            <head><meta charset='utf-8'></head>
+            <body style='font-family: Arial, sans-serif; background: #f5f5f5; padding: 20px;'>
+              <div style='max-width: 600px; margin: 0 auto; background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.1);'>
+                <div style='background: #1a1a2e; padding: 32px; text-align: center;'>
+                  <h1 style='color: white; margin: 0; font-size: 28px;'>📦 Kargonuz Oluşturuldu!</h1>
+                </div>
+                <div style='padding: 32px;'>
+                  <p style='font-size: 16px; color: #333;'>Merhaba <strong>{toName}</strong>,</p>
+                  <p style='font-size: 15px; color: #555;'>
+                    Kargonuz başarıyla sisteme kaydedildi. Aşağıdaki takip kodu ile kargonuzu sorgulayabilirsiniz.
+                  </p>
+      
+                  <div style='background: #e6f7ff; border: 2px solid #1890ff; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;'>
+                    <p style='margin: 0 0 8px; color: #666; font-size: 14px;'>TAKİP KODUNUZ</p>
+                    <div style='font-size: 36px; font-weight: 900; letter-spacing: 4px; color: #1890ff;'>{trackingCode}</div>
+                  </div>
+
+                  <div style='background: #f0f7ff; border-radius: 8px; padding: 16px; margin: 16px 0;'>
+                    <p style='margin: 0; color: #1890ff; font-size: 14px;'>
+                      🔍 Kargonuzu takip etmek için: <strong>http://localhost:3000/track</strong>
+                    </p>
+                  </div>
+
+                  <p style='color: #333; font-size: 14px;'>İyi günler dileriz,<br><strong>KargoTakip Ekibi</strong></p>
+                </div>
+                <div style='background: #f5f5f5; padding: 16px; text-align: center;'>
+                  <p style='margin: 0; color: #999; font-size: 12px;'>Bu mail otomatik olarak gönderilmiştir.</p>
+                </div>
+              </div>
+            </body>
+            </html>";
+
+            await SendEmailAsync(toEmail, toName, subject, htmlBody);
+        }
+
         public async Task SendShipmentStatusEmailAsync(
             string toEmail, string toName, string trackingCode,
             string status, string? deliveryCode = null)

@@ -8,6 +8,7 @@
         public string CurrentStatus { get; set; } = string.Empty;
         public int BranchId { get; set; }
         public DateTime OlusturulmaTarihi { get; set; }
+        public string? ReceiverEmail { get; set; }
     }
 
     public class KargoDurumuGuncellendiEvent

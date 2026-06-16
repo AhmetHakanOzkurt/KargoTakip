@@ -254,6 +254,45 @@ namespace OrderService.Controllers
             return Ok(new { message = "Kargo başarıyla teslim edildi.", shipment.TrackingCode });
         }
 
+        // Müşteri takip - token gerektirmez
+        [AllowAnonymous]
+        [HttpGet("track/{trackingCode}")]
+        public async Task<IActionResult> Track(string trackingCode)
+        {
+            var shipment = await _context.Shipments
+                .Include(s => s.ReceiverCity)
+                .Include(s => s.Branch)
+                .Include(s => s.StatusHistories)
+                .Where(s => s.TrackingCode == trackingCode)
+                .Select(s => new
+                {
+                    s.TrackingCode,
+                    s.ReceiverName,
+                    s.ReceiverAddress,
+                    ReceiverCity = s.ReceiverCity.Name,
+                    s.Weight,
+                    s.Priority,
+                    s.CurrentStatus,
+                    Branch = s.Branch.Name,
+                    s.CreatedAt,
+                    s.UpdatedAt,
+                    StatusHistory = s.StatusHistories
+                        .OrderBy(h => h.ChangedAt)
+                        .Select(h => new
+                        {
+                            h.Status,
+                            h.Note,
+                            h.ChangedAt
+                        }).ToList()
+                })
+                .FirstOrDefaultAsync();
+
+            if (shipment == null)
+                return NotFound(new { message = "Kargo bulunamadı." });
+
+            return Ok(shipment);
+        }
+
 
         [HttpPost]
         public async Task<IActionResult> Create([FromBody] CreateShipmentRequest request)
@@ -370,6 +409,7 @@ namespace OrderService.Controllers
                 ShipmentId = shipment.Id,
                 TrackingCode = shipment.TrackingCode,
                 ReceiverName = shipment.ReceiverName,
+                ReceiverEmail = shipment.ReceiverEmail,
                 CurrentStatus = shipment.CurrentStatus,
                 BranchId = shipment.BranchId,
                 OlusturulmaTarihi = shipment.CreatedAt
