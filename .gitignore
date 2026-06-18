@@ -5,3 +5,6 @@ obj/
 appsettings.Development.json
 logs/
 *.db
+.env
+.env.*
+!.env.example

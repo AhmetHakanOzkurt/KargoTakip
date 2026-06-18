@@ -1,13 +1,13 @@
 import axios from 'axios';
 
-const BASE = process.env.REACT_APP_API_BASE || 'http://localhost';
+const BASE = process.env.REACT_APP_API_BASE || '';
 
-const AUTH_URL = `${BASE}:5001`;
-const ORDER_URL = `${BASE}:5002`;
-const VEHICLE_URL = `${BASE}:5003`;
-const NOTIFICATION_URL = `${BASE}:5004`;
-const REPORT_URL = `${BASE}:5005`;
-const CONSOLIDATION_URL = `${BASE}:5006`;
+const AUTH_URL = `${BASE}`;
+const ORDER_URL = `${BASE}`;
+const VEHICLE_URL = `${BASE}`;
+const NOTIFICATION_URL = `${BASE}`;
+const REPORT_URL = `${BASE}`;
+const CONSOLIDATION_URL = `${BASE}`;
 
 // Token'ı localStorage'dan al
 const getToken = () => localStorage.getItem('token');

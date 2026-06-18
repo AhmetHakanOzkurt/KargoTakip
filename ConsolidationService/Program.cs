@@ -1,4 +1,4 @@
-using ConsolidationService.BackgroundServices;
+﻿using ConsolidationService.BackgroundServices;
 using ConsolidationService.Services;
 using KargoTakip.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -33,6 +33,7 @@ namespace ConsolidationService
                 });
             });
 
+            builder.Services.AddHealthChecks();
             builder.Services.AddControllers()
                 .AddJsonOptions(options =>
                 {
@@ -71,7 +72,8 @@ namespace ConsolidationService
 
             builder.Services.AddDbContext<KargoTakipDbContext>(options =>
                 options.UseSqlServer(
-                    builder.Configuration.GetConnectionString("DefaultConnection")));
+                    builder.Configuration.GetConnectionString("DefaultConnection"),
+                    sqlOptions => sqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null)));
 
             var jwtSettings = builder.Configuration.GetSection("JwtSettings");
             var secretKey = jwtSettings["SecretKey"]!;
@@ -98,10 +100,19 @@ namespace ConsolidationService
 
             var app = builder.Build();
 
-            if (app.Environment.IsDevelopment())
+            // Otomatik migration
+            using (var scope = app.Services.CreateScope())
             {
-                app.UseSwagger();
-                app.UseSwaggerUI();
+                try
+                {
+                    var db = scope.ServiceProvider.GetRequiredService<KargoTakipDbContext>();
+                    db.Database.Migrate();
+                }
+                catch (Exception ex)
+                {
+                    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+                    logger.LogError(ex, "Migration sirasinda hata olustu, devam ediliyor.");
+                }
             }
 
             app.UseSwagger();
@@ -109,6 +120,7 @@ namespace ConsolidationService
             app.UseCors("AllowDashboard");
             app.UseAuthentication();
             app.UseAuthorization();
+            app.MapHealthChecks("/health");
             app.MapControllers();
             app.Run();
         }

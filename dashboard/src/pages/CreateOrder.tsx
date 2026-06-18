@@ -27,7 +27,7 @@ export default function CreateOrder() {
     const fetchCities = async () => {
       try {
         const token = localStorage.getItem('token');
-        const res = await axios.get('http://localhost:5002/api/orders/cities', {
+        const res = await axios.get('/api/orders/cities', {
           headers: { Authorization: `Bearer ${token}` }
         });
         setCities(res.data);

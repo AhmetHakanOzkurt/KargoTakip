@@ -1,4 +1,4 @@
-using AspNetCoreRateLimit;
+﻿using AspNetCoreRateLimit;
 using FluentValidation;
 using KargoTakip.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -35,7 +35,8 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers();
+builder.Services.AddHealthChecks();
+            builder.Services.AddControllers();
 builder.Services.AddValidatorsFromAssemblyContaining<AuthService.Validators.LoginRequestValidator>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -44,7 +45,9 @@ builder.Services.AddSwaggerGen(c =>
 });
 
 builder.Services.AddDbContext<KargoTakipDbContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(
+        builder.Configuration.GetConnectionString("DefaultConnection"),
+        sqlOptions => sqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null)));
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
 var secretKey = jwtSettings["SecretKey"]!;
@@ -69,6 +72,21 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+// Otomatik migration
+using (var scope = app.Services.CreateScope())
+{
+    try
+    {
+        var db = scope.ServiceProvider.GetRequiredService<KargoTakipDbContext>();
+        db.Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+        logger.LogError(ex, "Migration sirasinda hata olustu, devam ediliyor.");
+    }
+}
+
 app.UseSwagger();
 app.UseSwaggerUI();
 
@@ -76,5 +94,6 @@ app.UseIpRateLimiting();
 app.UseMiddleware<AuthService.Middleware.ExceptionHandlingMiddleware>();
 app.UseCors("AllowDashboard");
 app.UseAuthorization();
-app.MapControllers();
+app.MapHealthChecks("/health");
+            app.MapControllers();
 app.Run();

@@ -2,8 +2,9 @@ services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     environment:
-      SA_PASSWORD: "KargoTakip123!"
+      SA_PASSWORD: "${DB_PASSWORD}"
       ACCEPT_EULA: "Y"
+    restart: unless-stopped
     ports:
       - "1433:1433"
     volumes:
@@ -13,6 +14,7 @@ services:
 
   rabbitmq:
     image: rabbitmq:management
+    restart: unless-stopped
     ports:
       - "5672:5672"
       - "15672:15672"
@@ -28,16 +30,23 @@ services:
     build:
       context: .
       dockerfile: AuthService/Dockerfile
+    restart: unless-stopped
     ports:
       - "5001:8080"
     environment:
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=KargoTakip123!;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=bu-cok-gizli-bir-anahtar-en-az-32-karakter-olmali
-      - JwtSettings__Issuer=KargoTakip
-      - JwtSettings__Audience=KargoTakipUsers
-      - JwtSettings__ExpiryInHours=8
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=${DB_PASSWORD};TrustServerCertificate=True;
+      - JwtSettings__SecretKey=${JWT_SECRET}
+      - JwtSettings__Issuer=${JWT_ISSUER}
+      - JwtSettings__Audience=${JWT_AUDIENCE}
+      - JwtSettings__ExpiryInHours=${JWT_EXPIRY_HOURS}
     depends_on:
       - sqlserver
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - kargo-network
 
@@ -45,14 +54,16 @@ services:
     build:
       context: .
       dockerfile: OrderService/Dockerfile
+    restart: unless-stopped
     ports:
       - "5002:8080"
     environment:
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=KargoTakip123!;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=bu-cok-gizli-bir-anahtar-en-az-32-karakter-olmali
-      - JwtSettings__Issuer=KargoTakip
-      - JwtSettings__Audience=KargoTakipUsers
-      - JwtSettings__ExpiryInHours=8
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=${DB_PASSWORD};TrustServerCertificate=True;
+      - JwtSettings__SecretKey=${JWT_SECRET}
+      - JwtSettings__Issuer=${JWT_ISSUER}
+      - JwtSettings__Audience=${JWT_AUDIENCE}
+      - JwtSettings__ExpiryInHours=${JWT_EXPIRY_HOURS}
       - RabbitMQ__HostName=rabbitmq
       - VehicleService__BaseUrl=http://vehicle-service:8080
     depends_on:
@@ -62,6 +73,11 @@ services:
         condition: service_started
       vehicle-service:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - kargo-network
 
@@ -69,16 +85,23 @@ services:
     build:
       context: .
       dockerfile: VehicleService/Dockerfile
+    restart: unless-stopped
     ports:
       - "5003:8080"
     environment:
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=KargoTakip123!;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=bu-cok-gizli-bir-anahtar-en-az-32-karakter-olmali
-      - JwtSettings__Issuer=KargoTakip
-      - JwtSettings__Audience=KargoTakipUsers
-      - JwtSettings__ExpiryInHours=8
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=${DB_PASSWORD};TrustServerCertificate=True;
+      - JwtSettings__SecretKey=${JWT_SECRET}
+      - JwtSettings__Issuer=${JWT_ISSUER}
+      - JwtSettings__Audience=${JWT_AUDIENCE}
+      - JwtSettings__ExpiryInHours=${JWT_EXPIRY_HOURS}
     depends_on:
       - sqlserver
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - kargo-network
 
@@ -86,25 +109,32 @@ services:
     build:
       context: .
       dockerfile: NotificationService/Dockerfile
+    restart: unless-stopped
     ports:
       - "5004:8080"
     environment:
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=KargoTakip123!;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=bu-cok-gizli-bir-anahtar-en-az-32-karakter-olmali
-      - JwtSettings__Issuer=KargoTakip
-      - JwtSettings__Audience=KargoTakipUsers
-      - JwtSettings__ExpiryInHours=8
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=${DB_PASSWORD};TrustServerCertificate=True;
+      - JwtSettings__SecretKey=${JWT_SECRET}
+      - JwtSettings__Issuer=${JWT_ISSUER}
+      - JwtSettings__Audience=${JWT_AUDIENCE}
+      - JwtSettings__ExpiryInHours=${JWT_EXPIRY_HOURS}
       - RabbitMQ__HostName=rabbitmq
-      - EmailSettings__FromEmail=ahmethakanozkurt@gmail.com
-      - EmailSettings__FromName=KargoTakip
-      - EmailSettings__SmtpHost=smtp.gmail.com
-      - EmailSettings__SmtpPort=587
-      - EmailSettings__Password=guhlywhtgnicawud
+      - EmailSettings__FromEmail=${EMAIL_FROM_EMAIL}
+      - EmailSettings__FromName=${EMAIL_FROM_NAME}
+      - EmailSettings__SmtpHost=${EMAIL_SMTP_HOST}
+      - EmailSettings__SmtpPort=${EMAIL_SMTP_PORT}
+      - EmailSettings__Password=${EMAIL_PASSWORD}
     depends_on:
       rabbitmq:
         condition: service_healthy
       sqlserver:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - kargo-network
 
@@ -112,16 +142,23 @@ services:
     build:
       context: .
       dockerfile: ReportService/Dockerfile
+    restart: unless-stopped
     ports:
       - "5005:8080"
     environment:
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=KargoTakip123!;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=bu-cok-gizli-bir-anahtar-en-az-32-karakter-olmali
-      - JwtSettings__Issuer=KargoTakip
-      - JwtSettings__Audience=KargoTakipUsers
-      - JwtSettings__ExpiryInHours=8
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=${DB_PASSWORD};TrustServerCertificate=True;
+      - JwtSettings__SecretKey=${JWT_SECRET}
+      - JwtSettings__Issuer=${JWT_ISSUER}
+      - JwtSettings__Audience=${JWT_AUDIENCE}
+      - JwtSettings__ExpiryInHours=${JWT_EXPIRY_HOURS}
     depends_on:
       - sqlserver
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - kargo-network
 
@@ -129,23 +166,30 @@ services:
     build:
       context: .
       dockerfile: ConsolidationService/Dockerfile
+    restart: unless-stopped
     ports:
       - "5006:8080"
     environment:
-      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=KargoTakip123!;TrustServerCertificate=True;
-      - JwtSettings__SecretKey=bu-cok-gizli-bir-anahtar-en-az-32-karakter-olmali
-      - JwtSettings__Issuer=KargoTakip
-      - JwtSettings__Audience=KargoTakipUsers
-      - JwtSettings__ExpiryInHours=8
+      - ASPNETCORE_ENVIRONMENT=Production
+      - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=${DB_PASSWORD};TrustServerCertificate=True;
+      - JwtSettings__SecretKey=${JWT_SECRET}
+      - JwtSettings__Issuer=${JWT_ISSUER}
+      - JwtSettings__Audience=${JWT_AUDIENCE}
+      - JwtSettings__ExpiryInHours=${JWT_EXPIRY_HOURS}
       - RabbitMQ__HostName=rabbitmq
-      - Consolidation__OccupancyThreshold=70
-      - Consolidation__MaxWaitHours=48
-      - Consolidation__CheckIntervalMinutes=60
+      - Consolidation__OccupancyThreshold=${CONSOLIDATION_OCCUPANCY_THRESHOLD}
+      - Consolidation__MaxWaitHours=${CONSOLIDATION_MAX_WAIT_HOURS}
+      - Consolidation__CheckIntervalMinutes=${CONSOLIDATION_CHECK_INTERVAL_MINUTES}
     depends_on:
       rabbitmq:
         condition: service_healthy
       sqlserver:
         condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
     networks:
       - kargo-network
    
@@ -153,12 +197,44 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
+    restart: unless-stopped
     ports:
       - "3000:80"
     environment:
-      - REACT_APP_API_BASE=http://localhost
+      - REACT_APP_API_BASE=
     networks:
       - kargo-network
+
+
+  nginx:
+    image: nginx:alpine
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "80:80"
+    depends_on:
+      - dashboard
+      - auth-service
+      - order-service
+      - vehicle-service
+      - notification-service
+      - report-service
+      - consolidation-service
+    restart: unless-stopped
+    networks:
+      - kargo-network
+
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    command: tunnel run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN}
+      - TUNNEL_TRANSPORT_PROTOCOL=http2
+    restart: unless-stopped
+    networks:
+      - kargo-network
+    depends_on:
+      - nginx
 
 networks:
   kargo-network:

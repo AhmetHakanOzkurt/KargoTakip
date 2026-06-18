@@ -1,4 +1,4 @@
-﻿using KargoTakip.Infrastructure.Data;
+using KargoTakip.Infrastructure.Data;
 using KargoTakip.Infrastructure.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -143,6 +143,17 @@ namespace AuthService.Controllers
             };
 
             await _context.Users.AddRangeAsync(users);
+            await _context.SaveChangesAsync();
+
+            // Araç Tipleri
+            var vehicleTypes = new List<VehicleType>
+            {
+                new VehicleType { Name = "Kamyon", MaxCapacity = 100, RouteType = "Şehirler Arası" },
+                new VehicleType { Name = "Kamyonet", MaxCapacity = 20, RouteType = "Şehir İçi" },
+                new VehicleType { Name = "Tır", MaxCapacity = 500, RouteType = "Şehirler Arası Uzun" }
+            };
+
+            await _context.VehicleTypes.AddRangeAsync(vehicleTypes);
             await _context.SaveChangesAsync();
 
             // Araçlar

@@ -1,4 +1,4 @@
-using KargoTakip.Infrastructure.Data;
+ï»¿using KargoTakip.Infrastructure.Data;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -32,6 +32,7 @@ namespace NotificationService
                 });
             });
 
+            builder.Services.AddHealthChecks();
             builder.Services.AddControllers()
                 .AddJsonOptions(options =>
                 {
@@ -53,23 +54,25 @@ namespace NotificationService
                     Description = "Bearer {token}"
                 });
                 c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-    {
-        {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-            {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
                 {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
+                    {
+                        new Microsoft.OpenApi.Models.OpenApiSecurityScheme
+                        {
+                            Reference = new Microsoft.OpenApi.Models.OpenApiReference
+                            {
+                                Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
+                                Id = "Bearer"
+                            }
+                        },
+                        Array.Empty<string>()
+                    }
+                });
             });
 
             builder.Services.AddDbContext<KargoTakipDbContext>(options =>
-                options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+                options.UseSqlServer(
+                    builder.Configuration.GetConnectionString("DefaultConnection"),
+                    sqlOptions => sqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null)));
 
             var jwtSettings = builder.Configuration.GetSection("JwtSettings");
             var secretKey = jwtSettings["SecretKey"]!;
@@ -93,16 +96,32 @@ namespace NotificationService
             builder.Services.AddAuthorization();
             builder.Services.AddSingleton<NotificationService.Services.EmailService>();
 
-            // RabbitMQ Consumer arka planda çalýþacak
+            // RabbitMQ Consumer arka planda Ã§alÄ±ÅŸacak
             builder.Services.AddHostedService<RabbitMqConsumer>();
 
             var app = builder.Build();
+
+            // Otomatik migration
+            using (var scope = app.Services.CreateScope())
+            {
+                try
+                {
+                    var db = scope.ServiceProvider.GetRequiredService<KargoTakipDbContext>();
+                    db.Database.Migrate();
+                }
+                catch (Exception ex)
+                {
+                    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+                    logger.LogError(ex, "Migration sirasinda hata olustu, devam ediliyor.");
+                }
+            }
 
             app.UseSwagger();
             app.UseSwaggerUI();
             app.UseCors("AllowDashboard");
             app.UseAuthentication();
             app.UseAuthorization();
+            app.MapHealthChecks("/health");
             app.MapControllers();
             app.Run();
         }
