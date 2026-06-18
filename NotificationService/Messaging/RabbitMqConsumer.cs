@@ -151,6 +151,16 @@ namespace NotificationService.Messaging
             context.Notifications.Add(notification);
             await context.SaveChangesAsync();
 
+            // Müşteriye mail gönder
+            if (!string.IsNullOrEmpty(ev.ReceiverEmail))
+            {
+                await _emailService.SendOrderCreatedEmailAsync(
+                    ev.ReceiverEmail,
+                    ev.ReceiverName ?? "Değerli Müşterimiz",
+                    ev.TrackingCode
+                );
+            }
+
             Console.WriteLine($"Bildirim oluşturuldu: {notification.Message}");
         }
 

@@ -11,6 +11,7 @@ import Reports from './pages/Reports';
 import Branches from './pages/Branches';
 import CreateOrder from './pages/CreateOrder';
 import CourierApp from './pages/CourierApp';
+import TrackingPage from './pages/TrackingPage';
 
 console.log('Current path:', window.location.pathname);
 
@@ -65,6 +66,7 @@ function App() {
       <Routes>
         <Route path="/courier" element={<CourierApp />} />
         <Route path="/*" element={<MainApp />} />
+        <Route path="/track" element={<TrackingPage />} />
       </Routes>
     </BrowserRouter>
   );
