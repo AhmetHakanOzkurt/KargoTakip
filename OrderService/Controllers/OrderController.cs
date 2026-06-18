@@ -1,4 +1,4 @@
-﻿using FluentValidation;
+using FluentValidation;
 using KargoTakip.Infrastructure.Data;
 using KargoTakip.Infrastructure.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -76,8 +76,18 @@ namespace OrderService.Controllers
             return Ok(shipments);
         }
 
+        [HttpGet("cities")]
+        public async Task<IActionResult> GetCities()
+        {
+            var cities = await _context.Cities
+                .Select(c => new { c.Id, c.Name })
+                .OrderBy(c => c.Name)
+                .ToListAsync();
+            return Ok(cities);
+        }
+
         // Tek kargo getir
-        [HttpGet("{id}")]
+        [HttpGet("{id:int}")]
         public async Task<IActionResult> GetById(int id)
         {
             var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
@@ -125,7 +135,7 @@ namespace OrderService.Controllers
             return Ok(shipment);
         }
 
-        [HttpPut("{id}/status")]
+        [HttpPut("{id:int}/status")]
         public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateStatusRequest request)
         {
             var shipment = await _context.Shipments.FindAsync(id);
@@ -195,7 +205,7 @@ namespace OrderService.Controllers
             return random.Next(100000, 999999).ToString();
         }
 
-        [HttpPut("{id}/deliver")]
+        [HttpPut("{id:int}/deliver")]
         public async Task<IActionResult> Deliver(int id, [FromBody] DeliverRequest request)
         {
             var shipment = await _context.Shipments.FindAsync(id);
