@@ -47,6 +47,15 @@ namespace VehicleService.Controllers
             return Ok(vehicles);
         }
 
+        [HttpGet("types")]
+        public async Task<IActionResult> GetTypes()
+        {
+            var types = await _context.VehicleTypes
+                .Select(t => new { t.Id, t.Name, t.RouteType })
+                .ToListAsync();
+            return Ok(types);
+        }
+
         // Müsait araçları listele
         [HttpGet("available")]
         public async Task<IActionResult> GetAvailable([FromQuery] int? cityId)

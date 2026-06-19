@@ -20,6 +20,7 @@ const getMenuItems = (role: string) => {
     { key: 'consolidation', label: 'Konsolidasyon', icon: '🔄', roles: ['Admin'] },
     { key: 'notifications', label: 'Bildirimler', icon: '🔔', roles: ['Admin', 'BranchManager', 'Staff'] },
     { key: 'reports', label: 'Raporlar', icon: '📈', roles: ['Admin', 'BranchManager'] },
+    { key: 'management', label: 'Yönetim', icon: '⚙️', roles: ['Admin'] },
   ];
   return allItems.filter(item => item.roles.includes(role));
 };

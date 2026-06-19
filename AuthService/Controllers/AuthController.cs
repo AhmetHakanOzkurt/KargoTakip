@@ -31,6 +31,53 @@ namespace AuthService.Controllers
             _validator = validator;
         }
 
+        [HttpPost("users")]
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        public async Task<IActionResult> CreateUser([FromBody] CreateUserRequest request)
+        {
+            var role = User.FindFirst(ClaimTypes.Role)?.Value;
+            if (role != "Admin")
+                return Forbid();
+
+            var exists = await _context.Users.AnyAsync(u => u.Username == request.Username);
+            if (exists)
+                return BadRequest(new { message = "Bu kullanıcı adı zaten kullanılıyor." });
+
+            var branch = await _context.Branches.FindAsync(request.BranchId);
+            if (branch == null)
+                return BadRequest(new { message = "Şube bulunamadı." });
+
+            var user = new KargoTakip.Infrastructure.Models.User
+            {
+                Username = request.Username,
+                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                FullName = request.FullName,
+                Role = request.Role,
+                BranchId = request.BranchId,
+                CreatedAt = DateTime.UtcNow,
+                IsActive = true
+            };
+
+            _context.Users.Add(user);
+            await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Yeni kullanıcı oluşturuldu: {Username}", user.Username);
+
+            return Ok(new { user.Id, user.Username, user.FullName, user.Role, message = "Kullanıcı oluşturuldu." });
+        }
+
+        [HttpGet("branches")]
+        [Microsoft.AspNetCore.Authorization.Authorize]
+        public async Task<IActionResult> GetBranches()
+        {
+            var branches = await _context.Branches
+                .Where(b => b.IsActive)
+                .Select(b => new { b.Id, b.Name })
+                .OrderBy(b => b.Name)
+                .ToListAsync();
+            return Ok(branches);
+        }
+
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {
@@ -105,6 +152,15 @@ namespace AuthService.Controllers
     {
         public string Username { get; set; } = string.Empty;
         public string Password { get; set; } = string.Empty;
+    }
+
+    public class CreateUserRequest
+    {
+        public string Username { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
+        public string FullName { get; set; } = string.Empty;
+        public string Role { get; set; } = string.Empty;
+        public int BranchId { get; set; }
     }
 
 }

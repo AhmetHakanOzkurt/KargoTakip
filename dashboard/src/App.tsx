@@ -12,6 +12,7 @@ import Branches from './pages/Branches';
 import CreateOrder from './pages/CreateOrder';
 import CourierApp from './pages/CourierApp';
 import TrackingPage from './pages/TrackingPage';
+import Management from './pages/Management';
 
 console.log('Current path:', window.location.pathname);
 
@@ -44,6 +45,7 @@ function MainApp() {
       case 'reports': return <Reports />;
       case 'branches': return <Branches />;
       case 'create-order': return <CreateOrder />;
+      case 'management': return <Management />;
       default: return <div style={{ padding: '40px', color: '#666' }}>Bu sayfa yakında eklenecek...</div>;
     }
   };

@@ -70,3 +70,35 @@ export const getConsolidationSavings = () =>
 
 export const runConsolidation = () =>
   axios.post(`${CONSOLIDATION_URL}/api/consolidation/run`, {}, authHeader());
+
+// Transfers
+export const createTransfer = (data: any) =>
+  axios.post(`${ORDER_URL}/api/transfers`, data, authHeader());
+
+export const getOutgoingTransfers = () =>
+  axios.get(`${ORDER_URL}/api/transfers/outgoing`, authHeader());
+
+export const getIncomingTransfers = () =>
+  axios.get(`${ORDER_URL}/api/transfers/incoming`, authHeader());
+
+export const approveTransfer = (id: number, data: any) =>
+  axios.put(`${ORDER_URL}/api/transfers/${id}/approve`, data, authHeader());
+
+export const rejectTransfer = (id: number, data: any) =>
+  axios.put(`${ORDER_URL}/api/transfers/${id}/reject`, data, authHeader());
+
+// Management
+export const getBranches = () =>
+  axios.get(`${AUTH_URL}/api/auth/branches`, authHeader());
+
+export const createUser = (data: any) =>
+  axios.post(`${AUTH_URL}/api/auth/users`, data, authHeader());
+
+export const createVehicle = (data: any) =>
+  axios.post(`${VEHICLE_URL}/api/vehicles`, data, authHeader());
+
+export const getVehicleTypes = () =>
+  axios.get(`${VEHICLE_URL}/api/vehicles/types`, authHeader());
+
+export const getCities = () =>
+  axios.get(`${ORDER_URL}/api/orders/cities`, authHeader());
