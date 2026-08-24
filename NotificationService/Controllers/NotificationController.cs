@@ -35,14 +35,26 @@ namespace NotificationService.Controllers
 
         // Şubeye ait bildirimleri listele
         [HttpGet("{branchId}")]
-        public async Task<IActionResult> GetByBranch(int branchId)
+        public async Task<IActionResult> GetByBranch(
+            int branchId,
+            [FromQuery] int? sayfa,
+            [FromQuery] int? sayfaBoyutu)
         {
             if (!SubeyeErisebilir(branchId))
                 return Forbid();
 
-            var notifications = await _context.Notifications
-                .Where(n => n.BranchId == branchId)
+            // Onceden tum bildirimler tek seferde cekiliyordu.
+            var aktifSayfa = sayfa.GetValueOrDefault(1) < 1 ? 1 : sayfa.GetValueOrDefault(1);
+            var boyut = sayfaBoyutu.GetValueOrDefault(50);
+            boyut = boyut < 1 ? 50 : (boyut > 200 ? 200 : boyut);
+
+            var sorgu = _context.Notifications.Where(n => n.BranchId == branchId);
+            var toplamKayit = await sorgu.CountAsync();
+
+            var notifications = await sorgu
                 .OrderByDescending(n => n.CreatedAt)
+                .Skip((aktifSayfa - 1) * boyut)
+                .Take(boyut)
                 .Select(n => new
                 {
                     n.Id,
@@ -54,7 +66,13 @@ namespace NotificationService.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(notifications);
+            return Ok(new
+            {
+                toplamKayit,
+                sayfa = aktifSayfa,
+                sayfaBoyutu = boyut,
+                kayitlar = notifications
+            });
         }
 
         // Bildirimi okundu olarak işaretle

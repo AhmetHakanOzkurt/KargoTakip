@@ -39,6 +39,8 @@ services:
       - "5001:8080"
     environment:
       - ASPNETCORE_ENVIRONMENT=Production
+      # Semayi yalnizca bu servis uygular; digerleri hazir olmasini bekler.
+      - Database__RunMigrations=true
       - ConnectionStrings__DefaultConnection=Server=sqlserver;Database=KargoTakipDB;User Id=sa;Password=${DB_PASSWORD};TrustServerCertificate=True;
       - JwtSettings__SecretKey=${JWT_SECRET}
       - JwtSettings__Issuer=${JWT_ISSUER}
@@ -71,6 +73,8 @@ services:
       - RabbitMQ__HostName=rabbitmq
       - VehicleService__BaseUrl=http://vehicle-service:8080
     depends_on:
+      auth-service:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       sqlserver:
@@ -100,7 +104,10 @@ services:
       - JwtSettings__Audience=${JWT_AUDIENCE}
       - JwtSettings__ExpiryInHours=${JWT_EXPIRY_HOURS}
     depends_on:
-      - sqlserver
+      auth-service:
+        condition: service_healthy
+      sqlserver:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && echo -e \"GET /health HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && cat <&3 | grep -q \"200 OK\"'"]
       interval: 30s
@@ -130,6 +137,8 @@ services:
       - EmailSettings__SmtpPort=${EMAIL_SMTP_PORT}
       - EmailSettings__Password=${EMAIL_PASSWORD}
     depends_on:
+      auth-service:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       sqlserver:
@@ -157,7 +166,10 @@ services:
       - JwtSettings__Audience=${JWT_AUDIENCE}
       - JwtSettings__ExpiryInHours=${JWT_EXPIRY_HOURS}
     depends_on:
-      - sqlserver
+      auth-service:
+        condition: service_healthy
+      sqlserver:
+        condition: service_started
     healthcheck:
       test: ["CMD-SHELL", "bash -c 'exec 3<>/dev/tcp/127.0.0.1/8080 && echo -e \"GET /health HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n\" >&3 && cat <&3 | grep -q \"200 OK\"'"]
       interval: 30s
@@ -185,6 +197,8 @@ services:
       - Consolidation__MaxWaitHours=${CONSOLIDATION_MAX_WAIT_HOURS}
       - Consolidation__CheckIntervalMinutes=${CONSOLIDATION_CHECK_INTERVAL_MINUTES}
     depends_on:
+      auth-service:
+        condition: service_healthy
       rabbitmq:
         condition: service_healthy
       sqlserver:
@@ -201,11 +215,13 @@ services:
     build:
       context: ./dashboard
       dockerfile: Dockerfile
+      args:
+        # Bos birakilir: nginx ayni origin uzerinden proxy'ledigi icin
+        # istekler goreli yola gider.
+        REACT_APP_API_BASE: "${REACT_APP_API_BASE-}"
     restart: unless-stopped
     ports:
       - "3000:80"
-    environment:
-      - REACT_APP_API_BASE=
     networks:
       - kargo-network
 

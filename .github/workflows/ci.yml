@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  backend:
+    name: .NET build & test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Restore
+        run: dotnet restore KargoTakip.sln
+
+      - name: Build
+        run: dotnet build KargoTakip.sln --no-restore --configuration Release
+
+      - name: Test
+        run: dotnet test KargoTakip.sln --no-build --configuration Release --verbosity normal
+
+  frontend:
+    name: Dashboard build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: dashboard
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: dashboard/package-lock.json
+
+      - name: Install
+        run: npm ci
+
+      - name: Build
+        # CI=true uyarilari hataya cevirir; bundle build'de kirilmasin diye
+        # once burada yakalanir.
+        run: npm run build
+        env:
+          CI: true
+
+  compose:
+    name: docker-compose dogrulama
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Validate compose file
+        # .env.example yeterli; gercek secretlar CI'da bulunmaz.
+        run: |
+          cp .env.example .env
+          docker compose config -q

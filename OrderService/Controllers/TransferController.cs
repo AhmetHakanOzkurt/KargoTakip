@@ -75,23 +75,21 @@ namespace OrderService.Controllers
                 RequestedAt = DateTime.UtcNow
             };
 
-            _context.TransferRequests.Add(transferRequest);
-            await _context.SaveChangesAsync();
-
-            // Transfer kalemleri ekle
+            // Talep, kalemleri ve bildirim tek SaveChanges ile yazilir; onceden
+            // uc ayri cagri vardi ve arada hata olursa yarim kayit kaliyordu.
             var items = shipmentIds.Select(sid => new TransferRequestItem
             {
-                TransferRequestId = transferRequest.Id,
+                TransferRequest = transferRequest,
                 ShipmentId = sid
             }).ToList();
 
+            _context.TransferRequests.Add(transferRequest);
             _context.TransferRequestItems.AddRange(items);
-            await _context.SaveChangesAsync();
 
             // Hedef şubeye bildirim gönder
             var notification = new Notification
             {
-                TransferRequestId = transferRequest.Id,
+                TransferRequest = transferRequest,
                 BranchId = request.TargetBranchId,
                 Message = $"{requesterBranch.Name} şubesinden {shipmentIds.Count} kargo için transfer talebi geldi.",
                 IsRead = false,

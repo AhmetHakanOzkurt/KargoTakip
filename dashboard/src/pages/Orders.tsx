@@ -42,7 +42,7 @@ export default function Orders() {
   const fetchOrders = async () => {
     try {
       const res = await getOrders();
-      setOrders(res.data);
+      setOrders(res.data.kayitlar);
     } catch (err) {
       console.error(err);
     } finally {

@@ -59,9 +59,18 @@ namespace OrderService.Controllers
             }
         }
 
+        // Sayfalama parametrelerini normalize eder (varsayilan 50, tavan 200).
+        private static (int Sayfa, int Boyut) SayfaParametreleri(int? sayfa, int? boyut)
+        {
+            var s = sayfa.GetValueOrDefault(1);
+            var b = boyut.GetValueOrDefault(50);
+            return (s < 1 ? 1 : s, b < 1 ? 50 : (b > 200 ? 200 : b));
+        }
+
         // Tüm kargoları listele
         [HttpGet]
-        public async Task<IActionResult> GetAll()
+        public async Task<IActionResult> GetAll(
+            [FromQuery] int? sayfa, [FromQuery] int? sayfaBoyutu)
         {
             var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
             var branchIdClaim = User.FindFirst("branchId")?.Value;
@@ -78,7 +87,14 @@ namespace OrderService.Controllers
             if (role != "Admin")
                 query = query.Where(s => s.BranchId == userBranchId);
 
+            // Onceden tum tablo cekiliyordu.
+            var (aktifSayfa, boyut) = SayfaParametreleri(sayfa, sayfaBoyutu);
+            var toplamKayit = await query.CountAsync();
+
             var shipments = await query
+                .OrderByDescending(s => s.CreatedAt)
+                .Skip((aktifSayfa - 1) * boyut)
+                .Take(boyut)
                 .Select(s => new
                 {
                     s.Id,
@@ -98,7 +114,13 @@ namespace OrderService.Controllers
                 })
                 .ToListAsync();
 
-            return Ok(shipments);
+            return Ok(new
+            {
+                toplamKayit,
+                sayfa = aktifSayfa,
+                sayfaBoyutu = boyut,
+                kayitlar = shipments
+            });
         }
 
         [HttpGet("cities")]
@@ -241,26 +263,16 @@ namespace OrderService.Controllers
             });
         }
 
-        private string GenerateDeliveryCode()
-        {
-            // Random tahmin edilebilir; teslimat kodu icin kriptografik uretec kullanilir.
-            return System.Security.Cryptography.RandomNumberGenerator
-                .GetInt32(100000, 1000000)
-                .ToString();
-        }
+        private string GenerateDeliveryCode() =>
+            OrderService.Services.KodUretici.TeslimatKodu();
 
         // Ticks tabanli eski uretim cakisabiliyordu. Kriptografik rastgele
         // uretip DB'de dogrular; unique index ikinci savunma hattidir.
         private async Task<string> GenerateUniqueTrackingCodeAsync()
         {
-            const string alfabe = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // I,O,0,1 yok
             for (int deneme = 0; deneme < 5; deneme++)
             {
-                var kod = "KRG-" + new string(Enumerable.Range(0, 10)
-                    .Select(_ => alfabe[
-                        System.Security.Cryptography.RandomNumberGenerator
-                            .GetInt32(alfabe.Length)])
-                    .ToArray());
+                var kod = OrderService.Services.KodUretici.TakipKodu();
 
                 if (!await _context.Shipments.AnyAsync(x => x.TrackingCode == kod))
                     return kod;
@@ -485,15 +497,11 @@ namespace OrderService.Controllers
                 ReceiverEmail = request.ReceiverEmail
             };
 
-            _context.Shipments.Add(shipment);
-            await _context.SaveChangesAsync();
-
-            _logger.LogInformation("Kargo oluşturuldu: {TrackingCode}", shipment.TrackingCode);
-
-            // İlk durum geçmişini kaydet
+            // Kargo ve ilk durum gecmisi tek SaveChanges ile yazilir; iki ayri
+            // cagri arasinda hata olursa gecmissiz kargo kaliyordu.
             var statusHistory = new ShipmentStatusHistory
             {
-                ShipmentId = shipment.Id,
+                Shipment = shipment,
                 Status = "Hazırlanıyor",
                 Note = "Kargo sisteme oluşturuldu.",
                 ServiceSource = "OrderService",
@@ -501,8 +509,11 @@ namespace OrderService.Controllers
                 ChangedByUserId = createdByUserId
             };
 
+            _context.Shipments.Add(shipment);
             _context.ShipmentStatusHistories.Add(statusHistory);
             await _context.SaveChangesAsync();
+
+            _logger.LogInformation("Kargo oluşturuldu: {TrackingCode}", shipment.TrackingCode);
 
             // Araç atama isteği gönder
             var assignRequest = new

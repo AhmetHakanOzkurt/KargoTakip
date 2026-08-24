@@ -242,30 +242,51 @@ namespace VehicleService.Controllers
         [HttpPost("assign")]
         public async Task<IActionResult> AssignVehicle([FromBody] AssignVehicleRequest request)
         {
-            // Uygun araç bul: müsait, aynı şehir, yeterli kapasite
-            var vehicle = await _context.Vehicles
-                .Include(v => v.VehicleType)
-                .Where(v =>
-                    v.IsAvailable &&
-                    v.CityId == request.CityId &&
-                    (v.Capacity - v.CurrentLoad) >= request.RequiredCapacity)
-                .OrderBy(v => v.CurrentLoad)
-                .FirstOrDefaultAsync();
+            if (request.RequiredCapacity <= 0)
+                return BadRequest(new { message = "Gerekli kapasite sıfırdan büyük olmalı." });
 
-            if (vehicle == null)
-                return NotFound(new { message = "Uygun araç bulunamadı." });
-
-            vehicle.CurrentLoad += request.RequiredCapacity;
-            if (vehicle.CurrentLoad >= vehicle.Capacity)
-                vehicle.IsAvailable = false;
-
-            await _context.SaveChangesAsync();
-
-            return Ok(new
+            // Oku-hesapla-yaz arasinda baska bir istek ayni araci doldurabilir.
+            // RowVersion ile catisma yakalanir ve baska bir araca dusulur.
+            for (int deneme = 0; deneme < 3; deneme++)
             {
-                vehicleId = vehicle.Id,
-                plateNumber = vehicle.PlateNumber,
-                message = "Araç başarıyla atandı."
+                var vehicle = await _context.Vehicles
+                    .Include(v => v.VehicleType)
+                    .Where(v =>
+                        v.IsAvailable &&
+                        v.CityId == request.CityId &&
+                        (v.Capacity - v.CurrentLoad) >= request.RequiredCapacity)
+                    .OrderBy(v => v.CurrentLoad)
+                    .FirstOrDefaultAsync();
+
+                if (vehicle == null)
+                    return NotFound(new { message = "Uygun araç bulunamadı." });
+
+                vehicle.CurrentLoad += request.RequiredCapacity;
+                if (vehicle.CurrentLoad >= vehicle.Capacity)
+                    vehicle.IsAvailable = false;
+
+                try
+                {
+                    await _context.SaveChangesAsync();
+
+                    return Ok(new
+                    {
+                        vehicleId = vehicle.Id,
+                        plateNumber = vehicle.PlateNumber,
+                        message = "Araç başarıyla atandı."
+                    });
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    // Baska bir istek bu araci degistirdi; takibi birakip yeniden sec.
+                    foreach (var entry in _context.ChangeTracker.Entries<Vehicle>().ToList())
+                        entry.State = EntityState.Detached;
+                }
+            }
+
+            return Conflict(new
+            {
+                message = "Araç ataması yoğunluk nedeniyle tamamlanamadı, tekrar deneyin."
             });
         }
     }

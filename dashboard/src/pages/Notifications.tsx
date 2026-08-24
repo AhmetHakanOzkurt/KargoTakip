@@ -14,7 +14,7 @@ export default function Notifications() {
   const fetchNotifications = async () => {
     try {
       const res = await getNotifications(user.branchId);
-      setNotifications(res.data);
+      setNotifications(res.data.kayitlar);
     } catch (err) {
       console.error(err);
     } finally {

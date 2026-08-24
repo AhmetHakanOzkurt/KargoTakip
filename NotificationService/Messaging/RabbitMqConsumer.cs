@@ -14,17 +14,29 @@ namespace NotificationService.Messaging
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly IConfiguration _configuration;
         private readonly EmailService _emailService;
+        private readonly ILogger<RabbitMqConsumer> _logger;
+        private const string DeadLetterExchange = "kargo_dlx";
+        private const string DeadLetterSuffix = ".dlq";
+
+        private static readonly string[] Kuyruklar =
+        {
+            "kargo_olusturuldu",
+            "kargo_durumu_guncellendi"
+        };
+
         private IConnection? _connection;
         private IChannel? _channel;
 
         public RabbitMqConsumer(
             IServiceScopeFactory scopeFactory,
             IConfiguration configuration,
-            EmailService emailService)
+            EmailService emailService,
+            ILogger<RabbitMqConsumer> logger)
         {
             _scopeFactory = scopeFactory;
             _configuration = configuration;
             _emailService = emailService;
+            _logger = logger;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -42,7 +54,8 @@ namespace NotificationService.Messaging
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"RabbitMQ bağlantısı kurulamadı, 5 saniye sonra tekrar deneniyor: {ex.Message}");
+                    _logger.LogWarning(ex,
+                        "RabbitMQ baglantisi kurulamadi, 5 saniye sonra tekrar denenecek.");
                     await Task.Delay(5000, stoppingToken);
                 }
             }
@@ -51,26 +64,53 @@ namespace NotificationService.Messaging
 
             _connection = connection;
             _channel = await _connection.CreateChannelAsync(cancellationToken: stoppingToken);
-           
 
-            // Kuyrukları tanımla
-            await _channel.QueueDeclareAsync(
-                queue: "kargo_olusturuldu",
+            // Ayni anda islenecek mesaj sayisini sinirla; aksi halde tum kuyruk
+            // bellege cekiliyordu.
+            await _channel.BasicQosAsync(0, 10, false, stoppingToken);
+
+            // Islenemeyen mesajlar sonsuz requeue yerine dead-letter kuyruguna gider.
+            await _channel.ExchangeDeclareAsync(
+                exchange: DeadLetterExchange,
+                type: ExchangeType.Direct,
                 durable: true,
-                exclusive: false,
                 autoDelete: false,
-                arguments: null,
                 cancellationToken: stoppingToken
             );
 
-            await _channel.QueueDeclareAsync(
-                queue: "kargo_durumu_guncellendi",
-                durable: true,
-                exclusive: false,
-                autoDelete: false,
-                arguments: null,
-                cancellationToken: stoppingToken
-            );
+            foreach (var kuyruk in Kuyruklar)
+            {
+                var dlq = kuyruk + DeadLetterSuffix;
+
+                await _channel.QueueDeclareAsync(
+                    queue: dlq,
+                    durable: true,
+                    exclusive: false,
+                    autoDelete: false,
+                    arguments: null,
+                    cancellationToken: stoppingToken
+                );
+
+                await _channel.QueueBindAsync(
+                    queue: dlq,
+                    exchange: DeadLetterExchange,
+                    routingKey: dlq,
+                    cancellationToken: stoppingToken
+                );
+
+                await _channel.QueueDeclareAsync(
+                    queue: kuyruk,
+                    durable: true,
+                    exclusive: false,
+                    autoDelete: false,
+                    arguments: new Dictionary<string, object?>
+                    {
+                        ["x-dead-letter-exchange"] = DeadLetterExchange,
+                        ["x-dead-letter-routing-key"] = dlq
+                    },
+                    cancellationToken: stoppingToken
+                );
+            }
 
             // kargo_olusturuldu dinle
             var kargoOlusturulduConsumer = new AsyncEventingBasicConsumer(_channel);
@@ -87,9 +127,13 @@ namespace NotificationService.Messaging
 
                     await _channel.BasicAckAsync(ea.DeliveryTag, false);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, true);
+                    // requeue:false -> mesaj DLQ'ya gider. Onceden true idi ve
+                    // bozuk bir mesaj kuyrugu sonsuz donguye sokuyordu.
+                    _logger.LogError(ex,
+                        "Mesaj islenemedi, DLQ'ya aktariliyor. Govde: {Body}", message);
+                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
                 }
             };
 
@@ -115,9 +159,13 @@ namespace NotificationService.Messaging
 
                     await _channel.BasicAckAsync(ea.DeliveryTag, false);
                 }
-                catch
+                catch (Exception ex)
                 {
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, true);
+                    // requeue:false -> mesaj DLQ'ya gider. Onceden true idi ve
+                    // bozuk bir mesaj kuyrugu sonsuz donguye sokuyordu.
+                    _logger.LogError(ex,
+                        "Mesaj islenemedi, DLQ'ya aktariliyor. Govde: {Body}", message);
+                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
                 }
             };
 
@@ -139,11 +187,24 @@ namespace NotificationService.Messaging
             var context = scope.ServiceProvider
                 .GetRequiredService<KargoTakipDbContext>();
 
+            var mesaj = $"{ev.TrackingCode} takip kodlu kargonuz hazırlanıyor.";
+
+            // Mesaj yeniden teslim edilirse ayni bildirim ve mail tekrar
+            // uretilmemeli.
+            if (await context.Notifications.AnyAsync(n =>
+                    n.ShipmentId == ev.ShipmentId && n.Message == mesaj))
+            {
+                _logger.LogInformation(
+                    "Bildirim zaten mevcut, tekrar islenmedi: {TrackingCode}",
+                    ev.TrackingCode);
+                return;
+            }
+
             var notification = new Notification
             {
                 ShipmentId = ev.ShipmentId,
                 BranchId = ev.BranchId,
-                Message = $"{ev.TrackingCode} takip kodlu kargunuz hazırlanıyor.",
+                Message = mesaj,
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow
             };
@@ -161,7 +222,7 @@ namespace NotificationService.Messaging
                 );
             }
 
-            Console.WriteLine($"Bildirim oluşturuldu: {notification.Message}");
+            _logger.LogInformation("Bildirim olusturuldu: {Message}", notification.Message);
         }
 
         private async Task HandleKargoDurumuGuncellendi(KargoDurumuGuncellendiEvent ev)
@@ -172,11 +233,20 @@ namespace NotificationService.Messaging
 
             var message = ev.YeniDurum switch
             {
-                "Yolda" => $"{ev.TrackingCode} takip kodlu kargunuz yola çıktı.",
-                "Dağıtımda" => $"{ev.TrackingCode} takip kodlu kargunuz dağıtımda.",
-                "Teslim Edildi" => $"{ev.TrackingCode} takip kodlu kargunuz teslim edildi.",
-                _ => $"{ev.TrackingCode} takip kodlu kargunuzun durumu güncellendi: {ev.YeniDurum}"
+                "Yolda" => $"{ev.TrackingCode} takip kodlu kargonuz yola çıktı.",
+                "Dağıtımda" => $"{ev.TrackingCode} takip kodlu kargonuz dağıtımda.",
+                "Teslim Edildi" => $"{ev.TrackingCode} takip kodlu kargonuz teslim edildi.",
+                _ => $"{ev.TrackingCode} takip kodlu kargonuzun durumu güncellendi: {ev.YeniDurum}"
             };
+
+            if (await context.Notifications.AnyAsync(n =>
+                    n.ShipmentId == ev.ShipmentId && n.Message == message))
+            {
+                _logger.LogInformation(
+                    "Bildirim zaten mevcut, tekrar islenmedi: {TrackingCode}",
+                    ev.TrackingCode);
+                return;
+            }
 
             var notification = new Notification
             {
@@ -202,7 +272,7 @@ namespace NotificationService.Messaging
                 );
             }
 
-            Console.WriteLine($"Bildirim oluşturuldu: {message}");
+            _logger.LogInformation("Bildirim olusturuldu: {Message}", message);
         }
 
         public override async Task StopAsync(CancellationToken cancellationToken)

@@ -12,6 +12,21 @@ const CONSOLIDATION_URL = `${BASE}`;
 // Token'ı localStorage'dan al
 const getToken = () => localStorage.getItem('token');
 
+// Token süresi dolduğunda UI sessizce boş veri gösteriyordu; 401'de oturumu kapat.
+axios.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && localStorage.getItem('token')) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+      if (window.location.pathname !== '/login') {
+        window.location.href = '/login';
+      }
+    }
+    return Promise.reject(error);
+  }
+);
+
 // Her istekte token header'ı ekle
 const authHeader = () => ({
   headers: { Authorization: `Bearer ${getToken()}` }
@@ -22,8 +37,11 @@ export const login = (username: string, password: string) =>
   axios.post(`${AUTH_URL}/api/auth/login`, { username, password });
 
 // Orders
-export const getOrders = () =>
-  axios.get(`${ORDER_URL}/api/orders`, authHeader());
+export const getOrders = (sayfa = 1, sayfaBoyutu = 50) =>
+  axios.get(
+    `${ORDER_URL}/api/orders?sayfa=${sayfa}&sayfaBoyutu=${sayfaBoyutu}`,
+    authHeader()
+  );
 
 export const createOrder = (data: any) =>
   axios.post(`${ORDER_URL}/api/orders`, data, authHeader());
@@ -39,8 +57,11 @@ export const getBranchSummary = () =>
   axios.get(`${VEHICLE_URL}/api/vehicles/branch-summary`, authHeader());
 
 // Notifications
-export const getNotifications = (branchId: number) =>
-  axios.get(`${NOTIFICATION_URL}/api/notifications/${branchId}`, authHeader());
+export const getNotifications = (branchId: number, sayfa = 1, sayfaBoyutu = 50) =>
+  axios.get(
+    `${NOTIFICATION_URL}/api/notifications/${branchId}?sayfa=${sayfa}&sayfaBoyutu=${sayfaBoyutu}`,
+    authHeader()
+  );
 
 export const getUnreadCount = (branchId: number) =>
   axios.get(`${NOTIFICATION_URL}/api/notifications/${branchId}/unread-count`, authHeader());

@@ -211,15 +211,9 @@ namespace ConsolidationService.Services
                              cd.ToCityId == destinationCityId)
                 .FirstOrDefaultAsync();
 
-            decimal fuelSaving = 0;
-            if (distance != null && items.Count > 1)
-            {
-                var fuelPer100Km = 35m;
-                var fuelPricePerLiter = 35m;
-                var seferBasinaYakit = distance.DistanceKm / 100m * fuelPer100Km;
-                var seferBasinaMaliyet = seferBasinaYakit * fuelPricePerLiter;
-                fuelSaving = (items.Count - 1) * seferBasinaMaliyet;
-            }
+            var fuelSaving = distance == null
+                ? 0m
+                : KonsolidasyonHesap.YakitTasarrufu(distance.DistanceKm, items.Count);
 
             var plan = new ConsolidationPlan
             {
@@ -230,7 +224,7 @@ namespace ConsolidationService.Services
                 PlannedDepartureAt = DateTime.UtcNow.AddHours(2),
                 TotalCapacity = totalCapacity,
                 UsedCapacity = usedCapacity,
-                OccupancyRate = (decimal)occupancyRate,
+                OccupancyRate = KonsolidasyonHesap.DolulukOrani(usedCapacity, totalCapacity),
                 EstimatedFuelSaving = fuelSaving,
                 CreatedAt = DateTime.UtcNow
             };

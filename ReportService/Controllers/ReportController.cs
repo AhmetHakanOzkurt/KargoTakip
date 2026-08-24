@@ -142,7 +142,9 @@ namespace ReportService.Controllers
         public async Task<IActionResult> GetShipmentReport(
             [FromQuery] DateTime? baslangic,
             [FromQuery] DateTime? bitis,
-            [FromQuery] int? subeId)
+            [FromQuery] int? subeId,
+            [FromQuery] int? sayfa,
+            [FromQuery] int? sayfaBoyutu)
         {
             var query = Kargolar()
                 .Include(s => s.Branch)
@@ -162,7 +164,17 @@ namespace ReportService.Controllers
             if (subeId.HasValue)
                 query = query.Where(s => s.BranchId == subeId.Value);
 
+            // Tarih araligi zorunlu degil; sayfalama olmadan tum tablo donuyordu.
+            var aktifSayfa = sayfa.GetValueOrDefault(1) < 1 ? 1 : sayfa.GetValueOrDefault(1);
+            var boyut = sayfaBoyutu.GetValueOrDefault(100);
+            boyut = boyut < 1 ? 100 : (boyut > 500 ? 500 : boyut);
+
+            var toplamKayit = await query.CountAsync();
+
             var report = await query
+                .OrderByDescending(s => s.CreatedAt)
+                .Skip((aktifSayfa - 1) * boyut)
+                .Take(boyut)
                 .Select(s => new
                 {
                     s.Id,
@@ -177,12 +189,13 @@ namespace ReportService.Controllers
                     s.CreatedAt,
                     s.UpdatedAt
                 })
-                .OrderByDescending(s => s.CreatedAt)
                 .ToListAsync();
 
             return Ok(new
             {
-                toplamKayit = report.Count,
+                toplamKayit,
+                sayfa = aktifSayfa,
+                sayfaBoyutu = boyut,
                 kayitlar = report
             });
         }

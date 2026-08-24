@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import axios from 'axios';
 
-const ORDER_URL = 'http://localhost:5002';
-const AUTH_URL = 'http://localhost:5001';
+// Sabit localhost portlari sunucuda/telefonda calismiyordu; api.ts ile ayni
+// BASE kullanilir (nginx ayni origin uzerinden proxy'ler).
+const BASE = process.env.REACT_APP_API_BASE || '';
+const ORDER_URL = BASE;
+const AUTH_URL = BASE;
 
 export default function CourierApp() {
   const [step, setStep] = useState<'login' | 'list' | 'detail'>('login');

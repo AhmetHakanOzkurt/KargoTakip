@@ -115,7 +115,8 @@ builder.Services.AddSingleton(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
     var hostName = config["RabbitMQ:HostName"] ?? "localhost";
-    return new OrderService.Messaging.RabbitMqProducer(hostName);
+    var logger = sp.GetRequiredService<ILogger<OrderService.Messaging.RabbitMqProducer>>();
+    return new OrderService.Messaging.RabbitMqProducer(hostName, logger);
 });
 
 var app = builder.Build();
@@ -126,7 +127,13 @@ using (var scope = app.Services.CreateScope())
     try
     {
         var db = scope.ServiceProvider.GetRequiredService<KargoTakipDbContext>();
-        db.Database.Migrate();
+        // Alti servis birden Migrate() cagirdiginda eszamanli baslangicta
+        // migration catismasi oluyordu. Production'da yalnizca
+        // Database__RunMigrations=true olan servis (auth-service) uygular.
+        var migrationCalistir = app.Configuration.GetValue<bool?>("Database:RunMigrations")
+            ?? app.Environment.IsDevelopment();
+        if (migrationCalistir)
+            db.Database.Migrate();
     }
     catch (Exception ex)
     {

@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import axios from 'axios';
 
-const ORDER_URL = 'http://localhost:5002';
+const ORDER_URL = process.env.REACT_APP_API_BASE || '';
 
 export default function TrackingPage() {
   const [trackingCode, setTrackingCode] = useState('');

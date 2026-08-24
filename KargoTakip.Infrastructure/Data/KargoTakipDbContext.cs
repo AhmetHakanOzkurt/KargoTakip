@@ -29,6 +29,83 @@ namespace KargoTakip.Infrastructure.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // Hicbir string alanda uzunluk tanimli degildi; hepsi nvarchar(max)
+            // olarak olusuyordu. SQL Server nvarchar(max) uzerinde index
+            // OLUSTURAMAZ, dolayisiyla asagidaki unique index'ler icin de
+            // bu tanimlar zorunludur.
+            modelBuilder.Entity<Shipment>(e =>
+            {
+                e.Property(x => x.TrackingCode).HasMaxLength(32).IsRequired();
+                e.Property(x => x.SenderName).HasMaxLength(100).IsRequired();
+                e.Property(x => x.ReceiverName).HasMaxLength(100).IsRequired();
+                e.Property(x => x.ReceiverAddress).HasMaxLength(255).IsRequired();
+                e.Property(x => x.Priority).HasMaxLength(20).IsRequired();
+                e.Property(x => x.CurrentStatus).HasMaxLength(30).IsRequired();
+                e.Property(x => x.ReceiverEmail).HasMaxLength(256);
+                e.Property(x => x.DeliveryCode).HasMaxLength(10);
+            });
+
+            modelBuilder.Entity<User>(e =>
+            {
+                e.Property(x => x.Username).HasMaxLength(50).IsRequired();
+                e.Property(x => x.PasswordHash).HasMaxLength(255).IsRequired();
+                e.Property(x => x.FullName).HasMaxLength(100).IsRequired();
+                e.Property(x => x.Role).HasMaxLength(20).IsRequired();
+            });
+
+            modelBuilder.Entity<Branch>(e =>
+            {
+                e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+                e.Property(x => x.Address).HasMaxLength(255).IsRequired();
+            });
+
+            modelBuilder.Entity<City>(e =>
+            {
+                e.Property(x => x.Name).HasMaxLength(100).IsRequired();
+                e.Property(x => x.Region).HasMaxLength(50).IsRequired();
+            });
+
+            modelBuilder.Entity<Vehicle>(e =>
+            {
+                e.Property(x => x.PlateNumber).HasMaxLength(20).IsRequired();
+                e.Property(x => x.RowVersion).IsRowVersion();
+            });
+
+            modelBuilder.Entity<VehicleType>(e =>
+            {
+                e.Property(x => x.Name).HasMaxLength(50).IsRequired();
+                e.Property(x => x.RouteType).HasMaxLength(30).IsRequired();
+            });
+
+            modelBuilder.Entity<Notification>(e =>
+            {
+                e.Property(x => x.Message).HasMaxLength(500).IsRequired();
+            });
+
+            modelBuilder.Entity<ShipmentStatusHistory>(e =>
+            {
+                e.Property(x => x.Status).HasMaxLength(30).IsRequired();
+                e.Property(x => x.Note).HasMaxLength(500);
+                e.Property(x => x.ServiceSource).HasMaxLength(50).IsRequired();
+            });
+
+            modelBuilder.Entity<TransferRequest>(e =>
+            {
+                e.Property(x => x.Status).HasMaxLength(20).IsRequired();
+                e.Property(x => x.Note).HasMaxLength(500);
+                e.Property(x => x.RejectionReason).HasMaxLength(500);
+            });
+
+            modelBuilder.Entity<ConsolidationPlan>(e =>
+            {
+                e.Property(x => x.Status).HasMaxLength(30).IsRequired();
+            });
+
+            modelBuilder.Entity<ConsolidationPlanItem>(e =>
+            {
+                e.Property(x => x.AddedReason).HasMaxLength(50).IsRequired();
+            });
+
             // Uygulama katmanindaki kontroller yarisa aciktir; benzersizlik
             // DB seviyesinde de garanti altina alinir.
             modelBuilder.Entity<Shipment>()

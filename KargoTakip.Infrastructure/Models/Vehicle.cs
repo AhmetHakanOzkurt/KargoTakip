@@ -18,6 +18,11 @@ namespace KargoTakip.Infrastructure.Models
         public bool IsAvailable { get; set; } = true;
         public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+        // Optimistic concurrency: CurrentLoad'u birden fazla servis (VehicleService,
+        // ConsolidationService, OrderService) guncelliyor. Eszamanli yazmada
+        // ikinci islem DbUpdateConcurrencyException alir ve yeniden denenir.
+        public byte[]? RowVersion { get; set; }
+
         public VehicleType VehicleType { get; set; } = null!;
         public Branch Branch { get; set; } = null!;
         public City City { get; set; } = null!;

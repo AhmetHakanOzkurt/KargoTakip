@@ -14,10 +14,10 @@ export default function Branches() {
       try {
         const [branchRes, orderRes] = await Promise.all([
           getBranchSummary(),
-          getOrders()
+          getOrders(1, 200)
         ]);
         setBranches(branchRes.data);
-        setOrders(orderRes.data);
+        setOrders(orderRes.data.kayitlar);
       } catch (err) {
         console.error(err);
       } finally {
