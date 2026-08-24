@@ -20,6 +20,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\KargoTakip.Infrastructure\KargoTakip.Infrastructure.csproj" />
+    <ProjectReference Include="..\KargoTakip.ServiceDefaults\KargoTakip.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

@@ -1,99 +1,17 @@
 ﻿using FluentValidation;
-using KargoTakip.Infrastructure.Data;
-using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.IdentityModel.Tokens;
-using Serilog;
-using System.Text;
+using KargoTakip.ServiceDefaults;
 
-Log.Logger = new LoggerConfiguration()
-    .WriteTo.Console()
-    .WriteTo.File("logs/log-.txt", rollingInterval: RollingInterval.Day)
-    .CreateLogger();
+ServiceDefaultsExtensions.KargoLoglamaKur();
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Host.UseSerilog();
 
-builder.Services.AddCors(options =>
-{
-    options.AddPolicy("AllowDashboard", policy =>
-    {
-        policy.WithOrigins(
-            "http://localhost:3000",
-            "http://localhost:5173")
-            .AllowAnyHeader()
-            .AllowAnyMethod();
-    });
-});
-
-builder.Services.AddHealthChecks();
-            builder.Services.AddControllers()
-    .AddJsonOptions(options =>
-    {
-        options.JsonSerializerOptions.ReferenceHandler =
-            System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
-    });
+// Serilog, CORS, Swagger, DbContext, JWT ve authorization kurulumu ortak.
+builder.AddKargoServiceDefaults("OrderService");
 
 builder.Services.AddValidatorsFromAssemblyContaining<OrderService.Validators.CreateShipmentRequestValidator>();
-builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen(c =>
-{
-    c.SwaggerDoc("v1", new() { Title = "OrderService", Version = "v1" });
-    c.AddSecurityDefinition("Bearer", new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-    {
-        Name = "Authorization",
-        Type = Microsoft.OpenApi.Models.SecuritySchemeType.ApiKey,
-        Scheme = "Bearer",
-        BearerFormat = "JWT",
-        In = Microsoft.OpenApi.Models.ParameterLocation.Header,
-        Description = "Bearer {token}"
-    });
-    c.AddSecurityRequirement(new Microsoft.OpenApi.Models.OpenApiSecurityRequirement
-    {
-        {
-            new Microsoft.OpenApi.Models.OpenApiSecurityScheme
-            {
-                Reference = new Microsoft.OpenApi.Models.OpenApiReference
-                {
-                    Type = Microsoft.OpenApi.Models.ReferenceType.SecurityScheme,
-                    Id = "Bearer"
-                }
-            },
-            Array.Empty<string>()
-        }
-    });
-});
 
-builder.Services.AddDbContext<KargoTakipDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection"),
-        sqlOptions => sqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null)));
-
-var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"];
-if (string.IsNullOrWhiteSpace(secretKey) || secretKey.Length < 32)
-    throw new InvalidOperationException(
-        "JwtSettings:SecretKey tanimli degil veya 32 karakterden kisa. " +
-        "Deger JWT_SECRET ortam degiskeni ile verilmelidir.");
-
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(options =>
-    {
-        options.TokenValidationParameters = new TokenValidationParameters
-        {
-            ValidateIssuer = true,
-            ValidateAudience = true,
-            ValidateLifetime = true,
-            ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSettings["Issuer"],
-            ValidAudience = jwtSettings["Audience"],
-            IssuerSigningKey = new SymmetricSecurityKey(
-                Encoding.UTF8.GetBytes(secretKey))
-        };
-    });
-
-builder.Services.AddAuthorization();
-
+// VehicleService cagrisi: IHttpClientFactory ile yonetilir, boylece her
+// istekte yeni HttpClient olusturulmaz.
 builder.Services.AddHttpClient("vehicle-service", client =>
 {
     var baseUrl = builder.Configuration["VehicleService:BaseUrl"]
@@ -111,6 +29,7 @@ builder.Services.AddHttpClient("vehicle-service", client =>
     return handler;
 });
 
+// Kalici RabbitMQ baglantisi tutar; singleton olmasi zorunludur.
 builder.Services.AddSingleton(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();
@@ -121,38 +40,6 @@ builder.Services.AddSingleton(sp =>
 
 var app = builder.Build();
 
-// Otomatik migration
-using (var scope = app.Services.CreateScope())
-{
-    try
-    {
-        var db = scope.ServiceProvider.GetRequiredService<KargoTakipDbContext>();
-        // Alti servis birden Migrate() cagirdiginda eszamanli baslangicta
-        // migration catismasi oluyordu. Production'da yalnizca
-        // Database__RunMigrations=true olan servis (auth-service) uygular.
-        var migrationCalistir = app.Configuration.GetValue<bool?>("Database:RunMigrations")
-            ?? app.Environment.IsDevelopment();
-        if (migrationCalistir)
-            db.Database.Migrate();
-    }
-    catch (Exception ex)
-    {
-        var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
-        logger.LogError(ex, "Migration sirasinda hata olustu, devam ediliyor.");
-    }
-}
+app.UseKargoServiceDefaults();
 
-// Swagger yalnizca gelistirmede acilir; production'da API yuzeyini ifsa etmemeli.
-if (app.Environment.IsDevelopment())
-{
-    app.UseSwagger();
-    app.UseSwaggerUI();
-}
-
-app.UseMiddleware<OrderService.Middleware.ExceptionHandlingMiddleware>();
-app.UseCors("AllowDashboard");
-app.UseAuthentication();
-app.UseAuthorization();
-app.MapHealthChecks("/health");
-            app.MapControllers();
 app.Run();
