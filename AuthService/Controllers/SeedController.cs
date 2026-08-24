@@ -1,12 +1,16 @@
 using KargoTakip.Infrastructure.Data;
 using KargoTakip.Infrastructure.Models;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace AuthService.Controllers
 {
+    // Test/demo verisi oluşturur: sabit şifreli kullanıcılar eklediği için
+    // yalnızca Admin çağırabilir.
     [ApiController]
     [Route("api/seed")]
+    [Authorize(Roles = "Admin")]
     public class SeedController : ControllerBase
     {
         private readonly KargoTakipDbContext _context;
@@ -16,9 +20,17 @@ namespace AuthService.Controllers
             _context = context;
         }
 
+        [AllowAnonymous]
         [HttpPost("all")]
         public async Task<IActionResult> SeedAll()
         {
+            // Bos veritabaninda ilk kurulum icin aciktir; kullanici olustuktan
+            // sonra yalnizca Admin calistirabilir.
+            var kullaniciVar = await _context.Users.AnyAsync();
+            if (kullaniciVar &&
+                User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value != "Admin")
+                return Forbid();
+
             // Zaten veri varsa tekrar ekleme
             if (await _context.Cities.CountAsync() > 1)
                 return BadRequest(new { message = "Veri zaten mevcut." });

@@ -56,7 +56,6 @@ export default function Orders() {
     try {
       await updateOrderStatus(selectedOrder.id, {
         newStatus,
-        changedByUserId: user.userId || 1,
         serviceSource: 'Dashboard'
       });
       await fetchOrders();

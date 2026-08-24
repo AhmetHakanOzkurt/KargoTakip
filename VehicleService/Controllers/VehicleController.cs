@@ -234,8 +234,7 @@ namespace VehicleService.Controllers
             });
         }
 
-        // Araç ata — OrderService tarafından çağrılacak
-        [AllowAnonymous]
+        // Araç ata — OrderService tarafından, çağıran kullanıcının token'ı iletilerek çağrılır
         [HttpPost("assign")]
         public async Task<IActionResult> AssignVehicle([FromBody] AssignVehicleRequest request)
         {

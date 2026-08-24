@@ -89,6 +89,24 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 builder.Services.AddAuthorization();
+
+builder.Services.AddHttpClient("vehicle-service", client =>
+{
+    var baseUrl = builder.Configuration["VehicleService:BaseUrl"]
+        ?? "https://localhost:7139";
+    client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+    client.Timeout = TimeSpan.FromSeconds(10);
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    var handler = new HttpClientHandler();
+    // Self-signed localhost sertifikasi sadece gelistirmede kabul edilir.
+    if (builder.Environment.IsDevelopment())
+        handler.ServerCertificateCustomValidationCallback =
+            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+    return handler;
+});
+
 builder.Services.AddSingleton(sp =>
 {
     var config = sp.GetRequiredService<IConfiguration>();

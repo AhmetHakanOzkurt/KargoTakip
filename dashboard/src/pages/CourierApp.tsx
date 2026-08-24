@@ -54,7 +54,7 @@ export default function CourierApp() {
     try {
       await axios.put(
         `${ORDER_URL}/api/orders/${selected.id}/deliver`,
-        { deliveryCode, changedByUserId: user.userId || 1 },
+        { deliveryCode },
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setSuccess('✅ Kargo başarıyla teslim edildi!');

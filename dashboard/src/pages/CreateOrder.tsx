@@ -79,8 +79,6 @@ export default function CreateOrder() {
         receiverCityId: parseInt(form.receiverCityId),
         weight: parseFloat(form.weight),
         priority: form.priority,
-        branchId: user.branchId,
-        createdByUserId: user.userId || 1,
         receiverEmail: form.receiverEmail 
       });
 

@@ -1,4 +1,4 @@
-using FluentValidation;
+﻿using FluentValidation;
 using KargoTakip.Infrastructure.Data;
 using KargoTakip.Infrastructure.Models;
 using Microsoft.AspNetCore.Authorization;
@@ -18,20 +18,45 @@ namespace OrderService.Controllers
         private readonly RabbitMqProducer _producer;
         private readonly ILogger<OrderController> _logger;
         private readonly IValidator<CreateShipmentRequest> _validator;
-        private readonly IConfiguration _configuration;
+        private readonly IValidator<UpdateStatusRequest> _statusValidator;
+        private readonly IHttpClientFactory _httpClientFactory;
 
         public OrderController(
             KargoTakipDbContext context,
             RabbitMqProducer producer,
             ILogger<OrderController> logger,
             IValidator<CreateShipmentRequest> validator,
-            IConfiguration configuration)
+            IValidator<UpdateStatusRequest> statusValidator,
+            IHttpClientFactory httpClientFactory)
         {
             _context = context;
             _producer = producer;
             _logger = logger;
             _validator = validator;
-            _configuration = configuration;
+            _statusValidator = statusValidator;
+            _httpClientFactory = httpClientFactory;
+        }
+
+        // Token'daki kimlik bilgileri — istemciden gelen degerlere guvenilmez.
+        private string? CurrentRole =>
+            User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+        private int CurrentUserId
+        {
+            get
+            {
+                int.TryParse(User.FindFirst("userId")?.Value, out int userId);
+                return userId;
+            }
+        }
+
+        private int CurrentBranchId
+        {
+            get
+            {
+                int.TryParse(User.FindFirst("branchId")?.Value, out int branchId);
+                return branchId;
+            }
         }
 
         // Tüm kargoları listele
@@ -138,6 +163,11 @@ namespace OrderService.Controllers
         [HttpPut("{id:int}/status")]
         public async Task<IActionResult> UpdateStatus(int id, [FromBody] UpdateStatusRequest request)
         {
+            var validationResult = await _statusValidator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+                return BadRequest(validationResult.Errors
+                    .Select(e => new { field = e.PropertyName, message = e.ErrorMessage }));
+
             var shipment = await _context.Shipments.FindAsync(id);
             if (shipment == null)
                 return NotFound(new { message = "Kargo bulunamadı." });
@@ -167,7 +197,7 @@ namespace OrderService.Controllers
                 Note = request.Note,
                 ServiceSource = request.ServiceSource ?? "OrderService",
                 ChangedAt = DateTime.UtcNow,
-                ChangedByUserId = request.ChangedByUserId
+                ChangedByUserId = CurrentUserId
             };
 
             _context.ShipmentStatusHistories.Add(statusHistory);
@@ -238,7 +268,7 @@ namespace OrderService.Controllers
                 Note = "Teslimat kodu doğrulandı.",
                 ServiceSource = "CourierApp",
                 ChangedAt = DateTime.UtcNow,
-                ChangedByUserId = request.ChangedByUserId
+                ChangedByUserId = CurrentUserId
             };
 
             _context.ShipmentStatusHistories.Add(statusHistory);
@@ -315,8 +345,17 @@ namespace OrderService.Controllers
             _logger.LogInformation("Yeni kargo oluşturuluyor: {SenderName} -> {ReceiverName}",
                 request.SenderName, request.ReceiverName);
 
+            // Şube ve kullanıcı token'dan alınır; yalnızca Admin başka şube adına kargo açabilir.
+            var branchId = CurrentBranchId;
+            if (CurrentRole == "Admin" && request.BranchId.HasValue)
+                branchId = request.BranchId.Value;
+
+            var createdByUserId = CurrentUserId;
+            if (branchId <= 0 || createdByUserId <= 0)
+                return Unauthorized(new { message = "Token'da şube veya kullanıcı bilgisi yok." });
+
             // Şubenin var olup olmadığını kontrol et
-            var branch = await _context.Branches.FindAsync(request.BranchId);
+            var branch = await _context.Branches.FindAsync(branchId);
             if (branch == null)
                 return BadRequest(new { message = "Şube bulunamadı." });
 
@@ -326,7 +365,7 @@ namespace OrderService.Controllers
                 return BadRequest(new { message = "Şehir bulunamadı." });
 
             // Kullanıcının var olup olmadığını kontrol et
-            var user = await _context.Users.FindAsync(request.CreatedByUserId);
+            var user = await _context.Users.FindAsync(createdByUserId);
             if (user == null)
                 return BadRequest(new { message = "Kullanıcı bulunamadı." });
 
@@ -343,8 +382,8 @@ namespace OrderService.Controllers
                 Weight = request.Weight,
                 Priority = request.Priority ?? "Normal",
                 CurrentStatus = "Hazırlanıyor",
-                BranchId = request.BranchId,
-                CreatedByUserId = request.CreatedByUserId,
+                BranchId = branchId,
+                CreatedByUserId = createdByUserId,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow,
                 ReceiverEmail = request.ReceiverEmail
@@ -363,7 +402,7 @@ namespace OrderService.Controllers
                 Note = "Kargo sisteme oluşturuldu.",
                 ServiceSource = "OrderService",
                 ChangedAt = DateTime.UtcNow,
-                ChangedByUserId = request.CreatedByUserId
+                ChangedByUserId = createdByUserId
             };
 
             _context.ShipmentStatusHistories.Add(statusHistory);
@@ -378,17 +417,15 @@ namespace OrderService.Controllers
 
             try
             {
-                var handler = new HttpClientHandler();
-                handler.ServerCertificateCustomValidationCallback =
-                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+                var httpClient = _httpClientFactory.CreateClient("vehicle-service");
 
-                var httpClient2 = new HttpClient(handler);
+                // Cagiranin token'ini ilet: VehicleService/assign artik kimlik dogrulamasi istiyor.
+                var authHeader = Request.Headers.Authorization.ToString();
+                if (!string.IsNullOrEmpty(authHeader))
+                    httpClient.DefaultRequestHeaders.Add("Authorization", authHeader);
 
-                var vehicleServiceUrl = _configuration["VehicleService:BaseUrl"]
-    ?? "https://localhost:7139";
-
-                var response = await httpClient2.PostAsJsonAsync(
-                    $"{vehicleServiceUrl}/api/vehicles/assign",
+                var response = await httpClient.PostAsJsonAsync(
+                    "api/vehicles/assign",
                     assignRequest
                 );
 
@@ -410,8 +447,9 @@ namespace OrderService.Controllers
             }
             catch (Exception ex)
             {
-                // Araç ataması başarısız olsa bile kargo oluşturulur
-                // İleride loglama buraya eklenecek
+                // Araç ataması başarısız olsa bile kargo oluşturulur.
+                _logger.LogWarning(ex,
+                    "Araç atama isteği başarısız: {TrackingCode}", shipment.TrackingCode);
             }
 
             var kargoEvent = new KargoOlusturulduEvent
@@ -445,8 +483,8 @@ namespace OrderService.Controllers
         public int ReceiverCityId { get; set; }
         public decimal Weight { get; set; }
         public string? Priority { get; set; }
-        public int BranchId { get; set; }
-        public int CreatedByUserId { get; set; }
+        // Sadece Admin baska bir sube adina kargo acabilir; bos birakilirsa token'daki sube kullanilir.
+        public int? BranchId { get; set; }
         public string? ReceiverEmail { get; set; }
     }
 
@@ -455,7 +493,6 @@ namespace OrderService.Controllers
         public string NewStatus { get; set; } = string.Empty;
         public string? Note { get; set; }
         public string? ServiceSource { get; set; }
-        public int ChangedByUserId { get; set; }
     }
     public class AssignResult
     {
@@ -465,6 +502,5 @@ namespace OrderService.Controllers
     public class DeliverRequest
     {
         public string DeliveryCode { get; set; } = string.Empty;
-        public int ChangedByUserId { get; set; }
     }
 }

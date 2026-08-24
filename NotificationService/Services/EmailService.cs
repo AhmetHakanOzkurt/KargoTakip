@@ -26,6 +26,13 @@ namespace NotificationService.Services
                 var smtpPort = int.Parse(emailSettings["SmtpPort"]!);
                 var password = emailSettings["Password"]!;
 
+                if (string.IsNullOrWhiteSpace(password))
+                {
+                    _logger.LogWarning(
+                        "EmailSettings:Password tanımlı değil, mail gönderilmedi: {Email}", toEmail);
+                    return;
+                }
+
                 var message = new MimeMessage();
                 message.From.Add(new MailboxAddress(fromName, fromEmail));
                 message.To.Add(new MailboxAddress(toName, toEmail));

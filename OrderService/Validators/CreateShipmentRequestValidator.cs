@@ -33,10 +33,8 @@ namespace OrderService.Validators
                 .WithMessage("Öncelik Normal, Acil veya Express olabilir.");
 
             RuleFor(x => x.BranchId)
-                .GreaterThan(0).WithMessage("Geçerli bir şube seçilmeli.");
-
-            RuleFor(x => x.CreatedByUserId)
-                .GreaterThan(0).WithMessage("Geçerli bir kullanıcı belirtilmeli.");
+                .GreaterThan(0).When(x => x.BranchId.HasValue)
+                .WithMessage("Geçerli bir şube seçilmeli.");
         }
     }
 
@@ -54,9 +52,6 @@ namespace OrderService.Validators
                 .NotEmpty().WithMessage("Yeni durum boş olamaz.")
                 .Must(s => GecerliDurumlar.Contains(s))
                 .WithMessage($"Geçerli durumlar: {string.Join(", ", GecerliDurumlar)}");
-
-            RuleFor(x => x.ChangedByUserId)
-                .GreaterThan(0).WithMessage("Geçerli bir kullanıcı belirtilmeli.");
         }
     }
 }

@@ -36,7 +36,7 @@ builder.Services.AddCors(options =>
 });
 
 builder.Services.AddHealthChecks();
-            builder.Services.AddControllers();
+builder.Services.AddControllers();
 builder.Services.AddValidatorsFromAssemblyContaining<AuthService.Validators.LoginRequestValidator>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -93,7 +93,8 @@ app.UseSwaggerUI();
 app.UseIpRateLimiting();
 app.UseMiddleware<AuthService.Middleware.ExceptionHandlingMiddleware>();
 app.UseCors("AllowDashboard");
+app.UseAuthentication();
 app.UseAuthorization();
 app.MapHealthChecks("/health");
-            app.MapControllers();
+app.MapControllers();
 app.Run();

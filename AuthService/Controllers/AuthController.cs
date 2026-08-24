@@ -111,6 +111,7 @@ namespace AuthService.Controllers
             return Ok(new
             {
                 token,
+                userId = user.Id,
                 username = user.Username,
                 fullName = user.FullName,
                 role = user.Role,

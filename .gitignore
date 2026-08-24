@@ -3,6 +3,8 @@ obj/
 .vs/
 *.user
 appsettings.Development.json
+# SMTP kimlik bilgisi icerir; degerler .env / ortam degiskeni ile verilir
+NotificationService/appsettings.json
 logs/
 *.db
 .env
