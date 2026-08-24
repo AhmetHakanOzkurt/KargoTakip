@@ -1,4 +1,5 @@
 ﻿using FluentValidation;
+using KargoTakip.Infrastructure.Models;
 using OrderService.Controllers;
 
 namespace OrderService.Validators
@@ -41,17 +42,13 @@ namespace OrderService.Validators
     public class UpdateStatusRequestValidator
         : AbstractValidator<UpdateStatusRequest>
     {
-        private static readonly string[] GecerliDurumlar =
-        {
-            "Hazırlanıyor", "Yolda", "Dağıtımda", "Teslim Edildi", "İptal"
-        };
-
         public UpdateStatusRequestValidator()
         {
             RuleFor(x => x.NewStatus)
                 .NotEmpty().WithMessage("Yeni durum boş olamaz.")
-                .Must(s => GecerliDurumlar.Contains(s))
-                .WithMessage($"Geçerli durumlar: {string.Join(", ", GecerliDurumlar)}");
+                .Must(ShipmentStatus.Gecerli)
+                .WithMessage(
+                    $"Geçerli durumlar: {string.Join(", ", ShipmentStatus.Hepsi)}");
         }
     }
 }

@@ -9,6 +9,11 @@ namespace NotificationService.Services
         private readonly IConfiguration _configuration;
         private readonly ILogger<EmailService> _logger;
 
+        // Mail sablonlarinda http://localhost:3000 sabit yaziliydi; musteriye
+        // giden linkler calismiyordu. App:PublicUrl ile yapilandirilir.
+        private string TakipAdresi =>
+            (_configuration["App:PublicUrl"] ?? "http://localhost:3000").TrimEnd('/');
+
         public EmailService(IConfiguration configuration, ILogger<EmailService> logger)
         {
             _configuration = configuration;
@@ -81,7 +86,7 @@ namespace NotificationService.Services
 
                   <div style='background: #f0f7ff; border-radius: 8px; padding: 16px; margin: 16px 0;'>
                     <p style='margin: 0; color: #1890ff; font-size: 14px;'>
-                      🔍 Kargonuzu takip etmek için: <strong>http://localhost:3000/track</strong>
+                      🔍 Kargonuzu takip etmek için: <strong>{TakipAdresi}/track</strong>
                     </p>
                   </div>
 
@@ -137,7 +142,7 @@ namespace NotificationService.Services
       </p>
       
       <div style='background: #fff7e6; border: 2px dashed #fa8c16; border-radius: 12px; padding: 24px; margin: 24px 0; text-align: center;'>
-        <p style='margin: 0 0 8px; color: #666; font-size: 14px;'>TESTİMAT DOĞRULAMA KODUNUZ</p>
+        <p style='margin: 0 0 8px; color: #666; font-size: 14px;'>TESLİMAT DOĞRULAMA KODUNUZ</p>
         <div style='font-size: 42px; font-weight: 900; letter-spacing: 8px; color: #fa8c16;'>{deliveryCode}</div>
         <p style='margin: 8px 0 0; color: #999; font-size: 12px;'>Kurye teslimatta bu kodu isteyecektir</p>
       </div>

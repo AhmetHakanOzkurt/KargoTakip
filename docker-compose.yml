@@ -131,6 +131,7 @@ services:
       - JwtSettings__Audience=${JWT_AUDIENCE}
       - JwtSettings__ExpiryInHours=${JWT_EXPIRY_HOURS}
       - RabbitMQ__HostName=rabbitmq
+      - App__PublicUrl=${APP_PUBLIC_URL-http://localhost:3000}
       - EmailSettings__FromEmail=${EMAIL_FROM_EMAIL}
       - EmailSettings__FromName=${EMAIL_FROM_NAME}
       - EmailSettings__SmtpHost=${EMAIL_SMTP_HOST}

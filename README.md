@@ -122,10 +122,36 @@ ReportService raporları sunar
 ### OrderService
 | Method | Endpoint | Açıklama |
 |--------|----------|----------|
-| GET | /api/orders | Tüm kargoları listele |
+| GET | /api/orders?sayfa=1&sayfaBoyutu=50 | Kargoları listele (sayfalı) |
 | GET | /api/orders/{id} | Tek kargo getir |
+| GET | /api/orders/cities | Şehir listesi |
+| GET | /api/orders/track/{trackingCode} | Müşteri takibi (token gerekmez) |
 | POST | /api/orders | Yeni kargo oluştur |
 | PUT | /api/orders/{id}/status | Kargo durumunu güncelle |
+| PUT | /api/orders/{id}/deliver | Teslimat kodu ile teslim et |
+
+Şube dışı erişim engellidir: Admin olmayan kullanıcılar yalnızca kendi
+şubelerinin kargolarını görebilir ve değiştirebilir. `branchId` ve
+`userId` istemciden değil JWT claim'lerinden okunur.
+
+### TransferService (OrderService içinde)
+| Method | Endpoint | Açıklama |
+|--------|----------|----------|
+| GET | /api/transfers/outgoing | Gönderilen transfer talepleri |
+| GET | /api/transfers/incoming | Gelen transfer talepleri |
+| POST | /api/transfers | Transfer talebi oluştur |
+| PUT | /api/transfers/{id}/approve | Talebi onayla |
+| PUT | /api/transfers/{id}/reject | Talebi reddet |
+
+### ConsolidationService
+| Method | Endpoint | Açıklama |
+|--------|----------|----------|
+| GET | /api/consolidation/plans | Konsolidasyon planlarını listele |
+| POST | /api/consolidation/run | Konsolidasyon algoritmasını çalıştır |
+
+Araçlar doluluk eşiğine ulaşınca veya kargolar `MaxWaitHours` süresini
+aşınca sefer planı oluşturulur; eşik altındaysa en yakın 3 komşu şehre
+giden kargolar da aynı sefere eklenir.
 
 ### VehicleService
 | Method | Endpoint | Açıklama |
@@ -138,7 +164,7 @@ ReportService raporları sunar
 ### NotificationService
 | Method | Endpoint | Açıklama |
 |--------|----------|----------|
-| GET | /api/notifications/{branchId} | Şube bildirimlerini listele |
+| GET | /api/notifications/{branchId}?sayfa=1&sayfaBoyutu=50 | Şube bildirimleri (sayfalı) |
 | GET | /api/notifications/{branchId}/unread-count | Okunmamış bildirim sayısı |
 | PUT | /api/notifications/{id}/read | Bildirimi okundu yap |
 
@@ -149,7 +175,10 @@ ReportService raporları sunar
 | GET | /api/reports/branches | Şube bazlı rapor |
 | GET | /api/reports/vehicles | Araç bazlı rapor |
 | GET | /api/reports/daily | Günlük rapor |
-| GET | /api/reports/shipments | Tarih aralığına göre kargo raporu |
+| GET | /api/reports/shipments | Tarih aralığına göre kargo raporu (sayfalı) |
+
+Listeleme uçları `{ toplamKayit, sayfa, sayfaBoyutu, kayitlar }` şeklinde
+zarf döner.
 
 ## 🔒 Güvenlik
 
@@ -158,6 +187,23 @@ ReportService raporları sunar
 - Rate limiting: Login endpoint'i 5 dakikada 5 deneme
 - FluentValidation ile input validasyonu
 - Global exception handler
+- Şube bazlı yetkilendirme: kullanıcı kimliği ve şubesi token claim'lerinden
+  alınır, istemciden gelen değerlere güvenilmez
+- Teslimat ve takip kodları `RandomNumberGenerator` ile üretilir
+- Swagger yalnızca Development ortamında açıktır
+
+### Secret yönetimi
+
+Hiçbir secret repoda tutulmaz. `JwtSettings:SecretKey` boştur ve ortam
+değişkeninden gelmelidir; tanımsız veya 32 karakterden kısaysa servis
+açılışta durur.
+
+```bash
+cp .env.example .env
+# .env icindeki JWT_SECRET, DB_PASSWORD ve EMAIL_PASSWORD doldurulmali
+```
+
+`JWT_SECRET` üretmek için: `openssl rand -base64 48`
 
 ## 📁 Proje Yapısı
 KargoTakip/
@@ -165,11 +211,37 @@ KargoTakip/
 │   ├── Models/                  # Entity sınıfları
 │   ├── Data/                    # DbContext ve Factory
 │   └── Migrations/              # EF Migration dosyaları
+│   └── Messaging/               # Servisler arasi paylasilan event sozlesmeleri
 ├── AuthService/                 # Kimlik doğrulama servisi
-├── OrderService/                # Kargo yönetim servisi
+├── OrderService/                # Kargo ve transfer yönetimi
 ├── VehicleService/              # Araç yönetim servisi
-├── NotificationService/         # Bildirim servisi
-└── ReportService/               # Raporlama servisi
+├── NotificationService/         # Bildirim ve e-posta servisi
+├── ReportService/               # Raporlama servisi
+├── ConsolidationService/        # Sefer konsolidasyon motoru
+├── KargoTakip.Tests/            # Birim testleri (xunit)
+├── dashboard/                   # React yönetim arayüzü
+└── Directory.Packages.props     # Merkezi paket sürüm yönetimi
+
+## 🧪 Test
+
+```bash
+dotnet test KargoTakip.sln
+```
+
+Her push ve pull request'te GitHub Actions .NET build+test, dashboard
+build ve `docker compose config` doğrulamasını çalıştırır.
+
+## 🗃️ Migration
+
+Şema değişikliğinden sonra:
+
+```bash
+dotnet ef migrations add <Ad> --project KargoTakip.Infrastructure --startup-project AuthService
+```
+
+Production'da migration'ları yalnızca `auth-service` uygular
+(`Database__RunMigrations=true`); diğer servisler onun sağlıklı olmasını
+bekler.
 
 ## 👨‍💻 Geliştirici
 

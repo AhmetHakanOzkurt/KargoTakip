@@ -1,5 +1,9 @@
-﻿namespace NotificationService.Messaging
+namespace KargoTakip.Infrastructure.Messaging
 {
+    // Bu sozlesmeler OrderService ve NotificationService'te birebir kopyaydi;
+    // birinde degisiklik yapilip digeri unutuldugunda mesajlar sessizce
+    // deserialize edilemiyordu. Tek kaynak burasidir.
+
     public class KargoOlusturulduEvent
     {
         public int ShipmentId { get; set; }

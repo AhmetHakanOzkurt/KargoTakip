@@ -95,9 +95,9 @@ namespace ReportService.Controllers
                     SubeAdi = b.Name,
                     ToplamKargo = b.Shipments.Count(),
                     TeslimEdilen = b.Shipments
-                        .Count(s => s.CurrentStatus == "Teslim Edildi"),
+                        .Count(s => s.CurrentStatus == ShipmentStatus.TeslimEdildi),
                     DevamEden = b.Shipments
-                        .Count(s => s.CurrentStatus != "Teslim Edildi"),
+                        .Count(s => s.CurrentStatus != ShipmentStatus.TeslimEdildi),
                     ToplamAgirlik = Math.Round(
                         b.Shipments.Sum(s => s.Weight), 2),
                     ToplamArac = b.Vehicles.Count(),
@@ -211,11 +211,11 @@ namespace ReportService.Controllers
                 .CountAsync(s => s.CreatedAt >= bugun && s.CreatedAt < yarin);
 
             var bugunTeslimEdilen = await Kargolar()
-                .CountAsync(s => s.CurrentStatus == "Teslim Edildi"
+                .CountAsync(s => s.CurrentStatus == ShipmentStatus.TeslimEdildi
                     && s.UpdatedAt >= bugun && s.UpdatedAt < yarin);
 
             var bugunYolda = await Kargolar()
-                .CountAsync(s => s.CurrentStatus == "Yolda"
+                .CountAsync(s => s.CurrentStatus == ShipmentStatus.Yolda
                     && s.UpdatedAt >= bugun && s.UpdatedAt < yarin);
 
             var aktifAracSayisi = await Araclar()

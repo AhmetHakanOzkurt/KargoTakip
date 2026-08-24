@@ -1,4 +1,5 @@
 ﻿using KargoTakip.Infrastructure.Data;
+using KargoTakip.Infrastructure.Messaging;
 using KargoTakip.Infrastructure.Models;
 using Microsoft.EntityFrameworkCore;
 using NotificationService.Services;

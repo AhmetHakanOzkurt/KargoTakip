@@ -53,7 +53,7 @@ namespace OrderService.Controllers
             var shipments = await _context.Shipments
                 .Where(s => shipmentIds.Contains(s.Id) &&
                             s.BranchId == request.RequesterBranchId &&
-                            s.CurrentStatus == "Hazırlanıyor")
+                            s.CurrentStatus == ShipmentStatus.Hazirlaniyor)
                 .ToListAsync();
 
             if (shipments.Count != shipmentIds.Count)

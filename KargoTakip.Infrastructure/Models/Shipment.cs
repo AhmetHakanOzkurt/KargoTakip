@@ -16,7 +16,7 @@ namespace KargoTakip.Infrastructure.Models
         public int ReceiverCityId { get; set; }
         public decimal Weight { get; set; }
         public string Priority { get; set; } = "Normal";
-        public string CurrentStatus { get; set; } = "Hazırlanıyor";
+        public string CurrentStatus { get; set; } = ShipmentStatus.Hazirlaniyor;
         public int BranchId { get; set; }
         public int? AssignedVehicleId { get; set; }
         public int CreatedByUserId { get; set; }

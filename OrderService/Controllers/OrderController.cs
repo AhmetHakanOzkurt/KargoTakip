@@ -1,5 +1,6 @@
 ﻿using FluentValidation;
 using KargoTakip.Infrastructure.Data;
+using KargoTakip.Infrastructure.Messaging;
 using KargoTakip.Infrastructure.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -199,11 +200,21 @@ namespace OrderService.Controllers
                 return Forbid();
 
             var eskiDurum = shipment.CurrentStatus;
+
+            // "Teslim Edildi" -> "Hazirlaniyor" gibi geriye donusler engellenmiyordu.
+            if (!ShipmentStatus.GecisGecerli(eskiDurum, request.NewStatus))
+                return BadRequest(new
+                {
+                    message = $"'{eskiDurum}' durumundan '{request.NewStatus}' " +
+                              "durumuna geçilemez."
+                });
+
             shipment.CurrentStatus = request.NewStatus;
             shipment.UpdatedAt = DateTime.UtcNow;
 
             // Dağıtıma çıkınca teslimat kodu üret
-            if (request.NewStatus == "Dağıtımda" && string.IsNullOrEmpty(shipment.DeliveryCode))
+            if (request.NewStatus == ShipmentStatus.Dagitimda &&
+                string.IsNullOrEmpty(shipment.DeliveryCode))
             {
                 shipment.DeliveryCode = GenerateDeliveryCode();
                 shipment.DeliveryCodeExpiry = DateTime.UtcNow.AddHours(24);
@@ -211,15 +222,14 @@ namespace OrderService.Controllers
             }
 
             // Teslim edilince kodu kullanıldı işaretle
-            if (request.NewStatus == "Teslim Edildi")
+            if (request.NewStatus == ShipmentStatus.TeslimEdildi)
             {
                 shipment.DeliveryCodeUsed = true;
             }
 
             // Terminal duruma ilk gecarken aracin yuku dusurulur.
-            var terminalDurumlar = new[] { "Teslim Edildi", "İptal" };
-            if (terminalDurumlar.Contains(request.NewStatus) &&
-                !terminalDurumlar.Contains(eskiDurum))
+            if (ShipmentStatus.TerminalMi(request.NewStatus) &&
+                !ShipmentStatus.TerminalMi(eskiDurum))
             {
                 await AracYukunuSerbestBirakAsync(shipment);
             }
@@ -327,7 +337,7 @@ namespace OrderService.Controllers
                                 i.ShipmentId != shipmentId)
                     .Join(_context.Shipments,
                         i => i.ShipmentId, sh => sh.Id, (i, sh) => sh.CurrentStatus)
-                    .AnyAsync(durum => durum != "Teslim Edildi" && durum != "İptal");
+                    .AnyAsync(durum => durum != ShipmentStatus.TeslimEdildi && durum != ShipmentStatus.Iptal);
 
                 if (!kalanVar)
                 {
@@ -348,7 +358,7 @@ namespace OrderService.Controllers
             if (CurrentRole != "Admin" && shipment.BranchId != CurrentBranchId)
                 return Forbid();
 
-            if (shipment.CurrentStatus == "Teslim Edildi")
+            if (shipment.CurrentStatus == ShipmentStatus.TeslimEdildi)
                 return BadRequest(new { message = "Bu kargo zaten teslim edildi." });
 
             if (string.IsNullOrEmpty(shipment.DeliveryCode))
@@ -363,7 +373,7 @@ namespace OrderService.Controllers
             if (shipment.DeliveryCode != request.DeliveryCode)
                 return BadRequest(new { message = "Teslimat kodu hatalı." });
 
-            shipment.CurrentStatus = "Teslim Edildi";
+            shipment.CurrentStatus = ShipmentStatus.TeslimEdildi;
             shipment.DeliveryCodeUsed = true;
             shipment.UpdatedAt = DateTime.UtcNow;
 
@@ -372,7 +382,7 @@ namespace OrderService.Controllers
             var statusHistory = new ShipmentStatusHistory
             {
                 ShipmentId = shipment.Id,
-                Status = "Teslim Edildi",
+                Status = ShipmentStatus.TeslimEdildi,
                 Note = "Teslimat kodu doğrulandı.",
                 ServiceSource = "CourierApp",
                 ChangedAt = DateTime.UtcNow,
@@ -386,8 +396,8 @@ namespace OrderService.Controllers
             {
                 ShipmentId = shipment.Id,
                 TrackingCode = shipment.TrackingCode,
-                EskiDurum = "Dağıtımda",
-                YeniDurum = "Teslim Edildi",
+                EskiDurum = ShipmentStatus.Dagitimda,
+                YeniDurum = ShipmentStatus.TeslimEdildi,
                 BranchId = shipment.BranchId,
                 GuncellemeTarihi = DateTime.UtcNow,
                 ReceiverEmail = shipment.ReceiverEmail,
@@ -489,7 +499,7 @@ namespace OrderService.Controllers
                 ReceiverCityId = request.ReceiverCityId,
                 Weight = request.Weight,
                 Priority = request.Priority ?? "Normal",
-                CurrentStatus = "Hazırlanıyor",
+                CurrentStatus = ShipmentStatus.Hazirlaniyor,
                 BranchId = branchId,
                 CreatedByUserId = createdByUserId,
                 CreatedAt = DateTime.UtcNow,
@@ -502,7 +512,7 @@ namespace OrderService.Controllers
             var statusHistory = new ShipmentStatusHistory
             {
                 Shipment = shipment,
-                Status = "Hazırlanıyor",
+                Status = ShipmentStatus.Hazirlaniyor,
                 Note = "Kargo sisteme oluşturuldu.",
                 ServiceSource = "OrderService",
                 ChangedAt = DateTime.UtcNow,

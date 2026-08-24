@@ -191,7 +191,7 @@ namespace VehicleService.Controllers
                             b.Vehicles.Sum(v => v.Capacity) * 100)
                         : 0,
                     AktifKargo = b.Shipments
-                        .Count(s => s.CurrentStatus != "Teslim Edildi")
+                        .Count(s => s.CurrentStatus != ShipmentStatus.TeslimEdildi)
                 })
                 .OrderBy(b => b.SubeAdi)
                 .ToListAsync();

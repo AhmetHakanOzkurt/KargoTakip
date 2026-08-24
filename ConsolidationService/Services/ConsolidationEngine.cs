@@ -46,7 +46,7 @@ namespace ConsolidationService.Services
             // Bu şubede bekleyen kargoları al
             var pendingShipments = await _context.Shipments
                 .Where(s => s.BranchId == branch.Id &&
-                            s.CurrentStatus == "Hazırlanıyor" &&
+                            s.CurrentStatus == ShipmentStatus.Hazirlaniyor &&
                             s.AssignedVehicle == null)
                 .Include(s => s.ReceiverCity)
                 .ToListAsync();
@@ -175,7 +175,7 @@ namespace ConsolidationService.Services
                 var neighborShipments = await _context.Shipments
                     .Where(s => s.BranchId == branch.Id &&
                                 s.ReceiverCityId == neighbor.ToCityId &&
-                                s.CurrentStatus == "Hazırlanıyor" &&
+                                s.CurrentStatus == ShipmentStatus.Hazirlaniyor &&
                                 s.AssignedVehicle == null &&
                                 !alreadyIncludedIds.Contains(s.Id))
                     .Take(remainingCapacity - result.Count)
@@ -251,7 +251,7 @@ namespace ConsolidationService.Services
             // Kargoları "Yolda" yap
             foreach (var (shipment, _) in items)
             {
-                shipment.CurrentStatus = "Yolda";
+                shipment.CurrentStatus = ShipmentStatus.Yolda;
                 shipment.AssignedVehicleId = vehicle.Id;
                 shipment.UpdatedAt = DateTime.UtcNow;
             }
