@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { getNotifications, markAsRead } from '../services/api';
 import { Notification } from '../types';
 
@@ -7,20 +7,24 @@ export default function Notifications() {
   const [loading, setLoading] = useState(true);
   const user = JSON.parse(localStorage.getItem('user') || '{}');
 
-  useEffect(() => {
-    fetchNotifications();
-  }, []);
+  // user her render'da yeniden parse edildigi icin bagimlilik olarak
+  // branchId kullanilir; aksi halde useEffect her render'da tetiklenir.
+  const branchId = user.branchId;
 
-  const fetchNotifications = async () => {
+  const fetchNotifications = useCallback(async () => {
     try {
-      const res = await getNotifications(user.branchId);
+      const res = await getNotifications(branchId);
       setNotifications(res.data.kayitlar);
     } catch (err) {
       console.error(err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [branchId]);
+
+  useEffect(() => {
+    fetchNotifications();
+  }, [fetchNotifications]);
 
   const handleMarkAsRead = async (id: number) => {
     try {
