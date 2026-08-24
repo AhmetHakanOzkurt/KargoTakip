@@ -236,8 +236,12 @@ build ve `docker compose config` doğrulamasını çalıştırır.
 Şema değişikliğinden sonra:
 
 ```bash
-dotnet ef migrations add <Ad> --project KargoTakip.Infrastructure --startup-project AuthService
+dotnet ef migrations add <Ad> --project KargoTakip.Infrastructure --startup-project KargoTakip.Infrastructure
 ```
+
+Startup projesi olarak servislerden biri kullanılamaz; yalnızca
+`KargoTakip.Infrastructure` `Microsoft.EntityFrameworkCore.Tools`
+paketine ve design-time `KargoTakipDbContextFactory` sınıfına sahiptir.
 
 Production'da migration'ları yalnızca `auth-service` uygular
 (`Database__RunMigrations=true`); diğer servisler onun sağlıklı olmasını
