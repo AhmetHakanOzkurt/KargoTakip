@@ -123,7 +123,11 @@ namespace AuthService.Controllers
         private string GenerateJwtToken(int userId, string username, string role, int branchId)
         {
             var jwtSettings = _configuration.GetSection("JwtSettings");
-            var secretKey = jwtSettings["SecretKey"]!;
+            var secretKey = jwtSettings["SecretKey"];
+            if (string.IsNullOrWhiteSpace(secretKey) || secretKey.Length < 32)
+                throw new InvalidOperationException(
+                    "JwtSettings:SecretKey tanimli degil veya 32 karakterden kisa. " +
+                    "Deger JWT_SECRET ortam degiskeni ile verilmelidir.");
             var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
             var credentials = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
 

@@ -1,5 +1,11 @@
-$vpsUrl = "http://89.168.66.116/api"
-$secret = "KargoProjesiGizliAnahtar2026"
+﻿# Adres ve paylasilan secret ortam degiskeninden gelir; koda gomulmez.
+$vpsUrl = $env:VPS_API_URL
+$secret = $env:UPDATER_SECRET
+
+if ([string]::IsNullOrWhiteSpace($vpsUrl) -or [string]::IsNullOrWhiteSpace($secret)) {
+    Write-Host "VPS_API_URL ve UPDATER_SECRET ortam degiskenleri tanimli olmalidir." -ForegroundColor Red
+    exit 1
+}
 $currentUrl = ""
 $logFile = "/app/tunnel_log.txt"
 $deadUrls = @()
@@ -35,11 +41,11 @@ function Restart-QuickTunnel {
 while ($true) {
     # 1. Aşama: Loglardan aktif linki bul
     $logs = docker logs --tail 100 kargotakip-cloudflared-quick-1 2>&1
-    $matches = $logs | Select-String -Pattern "https://[a-zA-Z0-9-]+\.trycloudflare\.com" -AllMatches | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Value
+    $tunnelUrls = $logs | Select-String -Pattern "https://[a-zA-Z0-9-]+\.trycloudflare\.com" -AllMatches | Select-Object -ExpandProperty Matches | Select-Object -ExpandProperty Value
     
     $validMatches = @()
-    if ($matches) {
-        $validMatches = @($matches | Where-Object { $deadUrls -notcontains $_ })
+    if ($tunnelUrls) {
+        $validMatches = @($tunnelUrls | Where-Object { $deadUrls -notcontains $_ })
     }
     
     $newUrl = $validMatches | Select-Object -Last 1

@@ -5,8 +5,10 @@ services:
       SA_PASSWORD: "${DB_PASSWORD}"
       ACCEPT_EULA: "Y"
     restart: unless-stopped
-    ports:
-      - "1433:1433"
+    # 1433 disariya publish EDILMEZ; servisler ayni docker agindan erisir.
+    # Yerelde SSMS ile baglanmak icin: docker compose port sqlserver 1433
+    expose:
+      - "1433"
     volumes:
       - sqlserver_data:/var/opt/mssql
     networks:
@@ -15,9 +17,11 @@ services:
   rabbitmq:
     image: rabbitmq:management
     restart: unless-stopped
-    ports:
-      - "5672:5672"
-      - "15672:15672"
+    # AMQP ve management arayuzu disariya publish EDILMEZ.
+    # Management UI icin: docker compose exec ile veya gecici port-forward.
+    expose:
+      - "5672"
+      - "15672"
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "ping"]
       interval: 10s
@@ -235,8 +239,13 @@ services:
     depends_on:
       - nginx
 
+  # DIKKAT: Quick Tunnel rastgele bir public trycloudflare.com adresi uretir ve
+  # tum sistemi kimlik dogrulamasiz internete acar. Varsayilan olarak baslatilmaz.
+  # Gerekirse: docker compose --profile quick-tunnel up -d
+  # Kalici cozum: named tunnel (asagidaki cloudflared) + Cloudflare Access.
   cloudflared-quick:
     image: cloudflare/cloudflared:latest
+    profiles: ["quick-tunnel"]
     command: tunnel --url http://nginx:80 --no-autoupdate
     restart: unless-stopped
     networks:
@@ -244,12 +253,18 @@ services:
     depends_on:
       - nginx
 
+  # Sadece quick tunnel ile birlikte anlamlidir. docker.sock mount'u bu konteynere
+  # host uzerinde root yetkisi verir; bu yuzden yalnizca profil ile calistirilir.
   vps-updater:
     build:
       context: .
       dockerfile: Dockerfile.updater
+    profiles: ["quick-tunnel"]
     container_name: kargotakip-vps-updater
     restart: unless-stopped
+    environment:
+      - VPS_API_URL=${VPS_API_URL}
+      - UPDATER_SECRET=${UPDATER_SECRET}
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./tunnel_log.txt:/app/tunnel_log.txt

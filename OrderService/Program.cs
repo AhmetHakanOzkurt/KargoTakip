@@ -70,7 +70,11 @@ builder.Services.AddDbContext<KargoTakipDbContext>(options =>
         sqlOptions => sqlOptions.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(10), errorNumbersToAdd: null)));
 
 var jwtSettings = builder.Configuration.GetSection("JwtSettings");
-var secretKey = jwtSettings["SecretKey"]!;
+var secretKey = jwtSettings["SecretKey"];
+if (string.IsNullOrWhiteSpace(secretKey) || secretKey.Length < 32)
+    throw new InvalidOperationException(
+        "JwtSettings:SecretKey tanimli degil veya 32 karakterden kisa. " +
+        "Deger JWT_SECRET ortam degiskeni ile verilmelidir.");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -131,8 +135,12 @@ using (var scope = app.Services.CreateScope())
     }
 }
 
-app.UseSwagger();
-app.UseSwaggerUI();
+// Swagger yalnizca gelistirmede acilir; production'da API yuzeyini ifsa etmemeli.
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.UseMiddleware<OrderService.Middleware.ExceptionHandlingMiddleware>();
 app.UseCors("AllowDashboard");
