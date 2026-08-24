@@ -29,6 +29,24 @@ namespace KargoTakip.Infrastructure.Data
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // Uygulama katmanindaki kontroller yarisa aciktir; benzersizlik
+            // DB seviyesinde de garanti altina alinir.
+            modelBuilder.Entity<Shipment>()
+                .HasIndex(s => s.TrackingCode)
+                .IsUnique();
+
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Username)
+                .IsUnique();
+
+            modelBuilder.Entity<Vehicle>()
+                .HasIndex(v => v.PlateNumber)
+                .IsUnique();
+
+            // Sik filtrelenen kolonlar
+            modelBuilder.Entity<Shipment>()
+                .HasIndex(s => new { s.BranchId, s.CurrentStatus });
+
             // TransferRequest — Branch ilişkisi iki FK olduğu için elle tanımlanmalı
             modelBuilder.Entity<TransferRequest>()
                 .HasOne(t => t.RequesterBranch)

@@ -85,6 +85,23 @@ namespace ConsolidationService.Services
             }
 
             var totalCapacity = vehicle.Capacity;
+
+            // Kapasite paket adedi cinsindendir (OrderService de requiredCapacity=1 gonderir).
+            // Gruptaki kargo sayisi kapasiteyi asarsa fazlasi bu sefere alinmaz;
+            // aksi halde doluluk %100'u asip OccupancyRate precision(5,2) tasardi.
+            if (shipments.Count > totalCapacity)
+            {
+                _logger.LogInformation(
+                    "Şube {BranchId} → Şehir {CityId}: {Total} kargodan {Fit} tanesi " +
+                    "bu sefere alınıyor, kalanı sonraki seferde değerlendirilecek.",
+                    branch.Id, destinationCityId, shipments.Count, totalCapacity);
+
+                shipments = shipments
+                    .OrderBy(s => s.CreatedAt)
+                    .Take(totalCapacity)
+                    .ToList();
+            }
+
             var usedCapacity = shipments.Count;
             var occupancyRate = (double)usedCapacity / totalCapacity * 100;
 
@@ -183,22 +200,25 @@ namespace ConsolidationService.Services
             int usedCapacity,
             double occupancyRate)
         {
-            // Yakıt tasarrufu hesabı
-            // Boş gitseydi tam tank yakardı, şimdi doluluk oranında yakacak
-            // Ortalama kamyon 100km'de 35 litre yakar, dizel 35 TL/litre varsayım
+            // Yakit tasarrufu hesabi.
+            // Onceki formul (1 - doluluk) ile carpiyordu; yani arac ne kadar BOS
+            // olursa tasarruf o kadar yuksek cikiyordu. Konsolidasyonun mantigi
+            // bunun tersi: tasarruf, yapilmayan ayri seferlerden gelir.
+            // Baz senaryo: her kargo ayri seferle gitseydi -> items.Count sefer.
+            // Konsolide senaryo: tek sefer. Tasarruf = (sefer sayisi - 1) x sefer maliyeti.
             var distance = await _context.CityDistances
                 .Where(cd => cd.FromCityId == branch.CityId &&
                              cd.ToCityId == destinationCityId)
                 .FirstOrDefaultAsync();
 
             decimal fuelSaving = 0;
-            if (distance != null)
+            if (distance != null && items.Count > 1)
             {
                 var fuelPer100Km = 35m;
                 var fuelPricePerLiter = 35m;
-                var totalFuel = distance.DistanceKm / 100m * fuelPer100Km;
-                var savedFuel = totalFuel * (1 - (decimal)occupancyRate / 100);
-                fuelSaving = savedFuel * fuelPricePerLiter;
+                var seferBasinaYakit = distance.DistanceKm / 100m * fuelPer100Km;
+                var seferBasinaMaliyet = seferBasinaYakit * fuelPricePerLiter;
+                fuelSaving = (items.Count - 1) * seferBasinaMaliyet;
             }
 
             var plan = new ConsolidationPlan
@@ -228,9 +248,11 @@ namespace ConsolidationService.Services
 
             _context.ConsolidationPlanItems.AddRange(planItems);
 
-            // Aracı meşgul et
-            vehicle.IsAvailable = false;
-            vehicle.CurrentLoad = usedCapacity;
+            // Araci mesgul et. CurrentLoad'un uzerine YAZILMAZ; aracin mevcut
+            // yukune eklenir, aksi halde VehicleService'in atadigi yuk kayboluyordu.
+            vehicle.CurrentLoad = Math.Min(
+                vehicle.Capacity, vehicle.CurrentLoad + usedCapacity);
+            vehicle.IsAvailable = vehicle.CurrentLoad < vehicle.Capacity;
 
             // Kargoları "Yolda" yap
             foreach (var (shipment, _) in items)

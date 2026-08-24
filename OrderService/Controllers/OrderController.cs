@@ -172,6 +172,10 @@ namespace OrderService.Controllers
             if (shipment == null)
                 return NotFound(new { message = "Kargo bulunamadı." });
 
+            // Baska subenin kargosu degistirilemez (GetAll/GetById ile ayni kural)
+            if (CurrentRole != "Admin" && shipment.BranchId != CurrentBranchId)
+                return Forbid();
+
             var eskiDurum = shipment.CurrentStatus;
             shipment.CurrentStatus = request.NewStatus;
             shipment.UpdatedAt = DateTime.UtcNow;
@@ -188,6 +192,14 @@ namespace OrderService.Controllers
             if (request.NewStatus == "Teslim Edildi")
             {
                 shipment.DeliveryCodeUsed = true;
+            }
+
+            // Terminal duruma ilk gecarken aracin yuku dusurulur.
+            var terminalDurumlar = new[] { "Teslim Edildi", "İptal" };
+            if (terminalDurumlar.Contains(request.NewStatus) &&
+                !terminalDurumlar.Contains(eskiDurum))
+            {
+                await AracYukunuSerbestBirakAsync(shipment);
             }
 
             var statusHistory = new ShipmentStatusHistory
@@ -231,8 +243,87 @@ namespace OrderService.Controllers
 
         private string GenerateDeliveryCode()
         {
-            var random = new Random();
-            return random.Next(100000, 999999).ToString();
+            // Random tahmin edilebilir; teslimat kodu icin kriptografik uretec kullanilir.
+            return System.Security.Cryptography.RandomNumberGenerator
+                .GetInt32(100000, 1000000)
+                .ToString();
+        }
+
+        // Ticks tabanli eski uretim cakisabiliyordu. Kriptografik rastgele
+        // uretip DB'de dogrular; unique index ikinci savunma hattidir.
+        private async Task<string> GenerateUniqueTrackingCodeAsync()
+        {
+            const string alfabe = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // I,O,0,1 yok
+            for (int deneme = 0; deneme < 5; deneme++)
+            {
+                var kod = "KRG-" + new string(Enumerable.Range(0, 10)
+                    .Select(_ => alfabe[
+                        System.Security.Cryptography.RandomNumberGenerator
+                            .GetInt32(alfabe.Length)])
+                    .ToArray());
+
+                if (!await _context.Shipments.AnyAsync(x => x.TrackingCode == kod))
+                    return kod;
+            }
+
+            throw new InvalidOperationException(
+                "Benzersiz takip kodu uretilemedi.");
+        }
+
+        // Kargo terminal duruma gecerken tasidigi aracin yukunu geri birakir.
+        // Bu yapilmazsa CurrentLoad hic azalmaz ve tum filo zamanla dolu gorunur.
+        private async Task AracYukunuSerbestBirakAsync(Shipment shipment)
+        {
+            if (shipment.AssignedVehicleId == null)
+                return;
+
+            var vehicle = await _context.Vehicles.FindAsync(shipment.AssignedVehicleId.Value);
+            if (vehicle == null)
+                return;
+
+            vehicle.CurrentLoad = Math.Max(0, vehicle.CurrentLoad - 1);
+            if (vehicle.CurrentLoad < vehicle.Capacity)
+                vehicle.IsAvailable = true;
+
+            _logger.LogInformation(
+                "Arac {VehicleId} yuku serbest birakildi: {Load}/{Capacity}",
+                vehicle.Id, vehicle.CurrentLoad, vehicle.Capacity);
+
+            await KonsolidasyonPlaniniKapatAsync(shipment.Id);
+        }
+
+        // Plan Status'u hicbir zaman "Planlandi"dan cikmiyordu. Plandaki tum
+        // kargolar terminal duruma geldiyse plan tamamlanmis sayilir.
+        private async Task KonsolidasyonPlaniniKapatAsync(int shipmentId)
+        {
+            var planIds = await _context.ConsolidationPlanItems
+                .Where(i => i.ShipmentId == shipmentId)
+                .Select(i => i.ConsolidationPlanId)
+                .ToListAsync();
+
+            foreach (var planId in planIds)
+            {
+                var plan = await _context.ConsolidationPlans.FindAsync(planId);
+                if (plan == null || plan.Status == "Tamamlandı")
+                    continue;
+
+                // Bu metot SaveChanges'ten ONCE calisir; sorgu DB'yi okudugu icin
+                // isleme konu kargonun yeni durumu henuz gorunmez. Bu yuzden o
+                // kargo sorgudan haric tutulur, terminal oldugu zaten bilinmektedir.
+                var kalanVar = await _context.ConsolidationPlanItems
+                    .Where(i => i.ConsolidationPlanId == planId &&
+                                i.ShipmentId != shipmentId)
+                    .Join(_context.Shipments,
+                        i => i.ShipmentId, sh => sh.Id, (i, sh) => sh.CurrentStatus)
+                    .AnyAsync(durum => durum != "Teslim Edildi" && durum != "İptal");
+
+                if (!kalanVar)
+                {
+                    plan.Status = "Tamamlandı";
+                    _logger.LogInformation(
+                        "Konsolidasyon plani {PlanId} tamamlandi.", planId);
+                }
+            }
         }
 
         [HttpPut("{id:int}/deliver")]
@@ -241,6 +332,9 @@ namespace OrderService.Controllers
             var shipment = await _context.Shipments.FindAsync(id);
             if (shipment == null)
                 return NotFound(new { message = "Kargo bulunamadı." });
+
+            if (CurrentRole != "Admin" && shipment.BranchId != CurrentBranchId)
+                return Forbid();
 
             if (shipment.CurrentStatus == "Teslim Edildi")
                 return BadRequest(new { message = "Bu kargo zaten teslim edildi." });
@@ -260,6 +354,8 @@ namespace OrderService.Controllers
             shipment.CurrentStatus = "Teslim Edildi";
             shipment.DeliveryCodeUsed = true;
             shipment.UpdatedAt = DateTime.UtcNow;
+
+            await AracYukunuSerbestBirakAsync(shipment);
 
             var statusHistory = new ShipmentStatusHistory
             {
@@ -370,7 +466,7 @@ namespace OrderService.Controllers
                 return BadRequest(new { message = "Kullanıcı bulunamadı." });
 
             // Takip kodu üret
-            var trackingCode = "KRG-" + DateTime.UtcNow.Ticks.ToString().Substring(10, 8);
+            var trackingCode = await GenerateUniqueTrackingCodeAsync();
 
             var shipment = new Shipment
             {

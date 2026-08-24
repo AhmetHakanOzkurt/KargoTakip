@@ -43,6 +43,11 @@ namespace OrderService.Controllers
             if (targetBranch == null)
                 return BadRequest(new { message = "Hedef şube bulunamadı." });
 
+            // Bildirim metninde talebi GÖNDEREN şubenin adı yazmalı
+            var requesterBranch = await _context.Branches.FindAsync(request.RequesterBranchId);
+            if (requesterBranch == null)
+                return BadRequest(new { message = "Talep eden şube bulunamadı." });
+
             // Kargolar bu şubeye ait mi kontrol et
             var shipmentIds = request.ShipmentIds.Distinct().ToList();
             var shipments = await _context.Shipments
@@ -88,7 +93,7 @@ namespace OrderService.Controllers
             {
                 TransferRequestId = transferRequest.Id,
                 BranchId = request.TargetBranchId,
-                Message = $"{targetBranch.Name} şubesinden {shipmentIds.Count} kargo için transfer talebi geldi.",
+                Message = $"{requesterBranch.Name} şubesinden {shipmentIds.Count} kargo için transfer talebi geldi.",
                 IsRead = false,
                 CreatedAt = DateTime.UtcNow
             };
@@ -144,6 +149,7 @@ namespace OrderService.Controllers
                     t.Id,
                     t.Status,
                     t.Note,
+                    t.RejectionReason,
                     t.ScheduledAt,
                     t.RequestedAt,
                     t.RespondedAt,
@@ -346,7 +352,8 @@ namespace OrderService.Controllers
             transfer.Status = "Reddedildi";
             transfer.RespondedByUserId = userId;
             transfer.RespondedAt = DateTime.UtcNow;
-            transfer.Note = request.Reason;
+            // request.Reason ayri alana yazilir; talep sahibinin Note'u korunur.
+            transfer.RejectionReason = request.Reason;
 
             // Talep eden şubeye bildirim gönder
             var notification = new Notification

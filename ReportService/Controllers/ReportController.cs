@@ -1,4 +1,5 @@
 ﻿using KargoTakip.Infrastructure.Data;
+using KargoTakip.Infrastructure.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -17,13 +18,38 @@ namespace ReportService.Controllers
             _context = context;
         }
 
+        private string? CurrentRole =>
+            User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+        private int CurrentBranchId
+        {
+            get
+            {
+                int.TryParse(User.FindFirst("branchId")?.Value, out int branchId);
+                return branchId;
+            }
+        }
+
+        private bool AdminMi => CurrentRole == "Admin";
+
+        // Admin disindaki kullanicilar yalnizca kendi subelerinin verisini gorur.
+        private IQueryable<Shipment> Kargolar() =>
+            AdminMi
+                ? _context.Shipments
+                : _context.Shipments.Where(s => s.BranchId == CurrentBranchId);
+
+        private IQueryable<Vehicle> Araclar() =>
+            AdminMi
+                ? _context.Vehicles
+                : _context.Vehicles.Where(v => v.BranchId == CurrentBranchId);
+
         // Genel özet raporu
         [HttpGet("summary")]
         public async Task<IActionResult> GetSummary()
         {
-            var toplamKargo = await _context.Shipments.CountAsync();
+            var toplamKargo = await Kargolar().CountAsync();
 
-            var durumDagilimi = await _context.Shipments
+            var durumDagilimi = await Kargolar()
                 .GroupBy(s => s.CurrentStatus)
                 .Select(g => new
                 {
@@ -32,7 +58,7 @@ namespace ReportService.Controllers
                 })
                 .ToListAsync();
 
-            var oncelikDagilimi = await _context.Shipments
+            var oncelikDagilimi = await Kargolar()
                 .GroupBy(s => s.Priority)
                 .Select(g => new
                 {
@@ -41,8 +67,9 @@ namespace ReportService.Controllers
                 })
                 .ToListAsync();
 
-            var toplamAgirlik = await _context.Shipments
-                .SumAsync(s => s.Weight);
+            // Bos kumede SUM NULL doner; decimal? ile guvenli sekilde 0'a dusurulur.
+            var toplamAgirlik = await Kargolar()
+                .SumAsync(s => (decimal?)s.Weight) ?? 0m;
 
             return Ok(new
             {
@@ -57,7 +84,11 @@ namespace ReportService.Controllers
         [HttpGet("branches")]
         public async Task<IActionResult> GetBranchReport()
         {
-            var report = await _context.Branches
+            var subeSorgusu = AdminMi
+                ? _context.Branches
+                : _context.Branches.Where(b => b.Id == CurrentBranchId);
+
+            var report = await subeSorgusu
                 .Select(b => new
                 {
                     SubeId = b.Id,
@@ -82,7 +113,7 @@ namespace ReportService.Controllers
         [HttpGet("vehicles")]
         public async Task<IActionResult> GetVehicleReport()
         {
-            var report = await _context.Vehicles
+            var report = await Araclar()
                 .Include(v => v.VehicleType)
                 .Include(v => v.Branch)
                 .Select(v => new
@@ -113,10 +144,14 @@ namespace ReportService.Controllers
             [FromQuery] DateTime? bitis,
             [FromQuery] int? subeId)
         {
-            var query = _context.Shipments
+            var query = Kargolar()
                 .Include(s => s.Branch)
                 .Include(s => s.ReceiverCity)
                 .AsQueryable();
+
+            // Admin olmayan kullanici baska subeyi sorgulayamaz
+            if (!AdminMi && subeId.HasValue && subeId.Value != CurrentBranchId)
+                return Forbid();
 
             if (baslangic.HasValue)
                 query = query.Where(s => s.CreatedAt >= baslangic.Value);
@@ -159,18 +194,18 @@ namespace ReportService.Controllers
             var bugun = DateTime.UtcNow.Date;
             var yarin = bugun.AddDays(1);
 
-            var bugunOlusturulan = await _context.Shipments
+            var bugunOlusturulan = await Kargolar()
                 .CountAsync(s => s.CreatedAt >= bugun && s.CreatedAt < yarin);
 
-            var bugunTeslimEdilen = await _context.Shipments
+            var bugunTeslimEdilen = await Kargolar()
                 .CountAsync(s => s.CurrentStatus == "Teslim Edildi"
                     && s.UpdatedAt >= bugun && s.UpdatedAt < yarin);
 
-            var bugunYolda = await _context.Shipments
+            var bugunYolda = await Kargolar()
                 .CountAsync(s => s.CurrentStatus == "Yolda"
                     && s.UpdatedAt >= bugun && s.UpdatedAt < yarin);
 
-            var aktifAracSayisi = await _context.Vehicles
+            var aktifAracSayisi = await Araclar()
                 .CountAsync(v => !v.IsAvailable);
 
             return Ok(new

@@ -141,6 +141,10 @@ namespace VehicleService.Controllers
             if (vehicleType == null)
                 return BadRequest(new { message = "Araç tipi bulunamadı." });
 
+            // PlateNumber artik unique index'li; anlasilir hata donmek icin onceden kontrol edilir.
+            if (await _context.Vehicles.AnyAsync(v => v.PlateNumber == request.PlateNumber))
+                return BadRequest(new { message = "Bu plaka zaten kayıtlı." });
+
             var vehicle = new Vehicle
             {
                 PlateNumber = request.PlateNumber,

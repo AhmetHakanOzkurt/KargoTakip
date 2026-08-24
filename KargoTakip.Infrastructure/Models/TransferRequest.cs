@@ -13,6 +13,7 @@ namespace KargoTakip.Infrastructure.Models
         public int TargetBranchId { get; set; }
         public string Status { get; set; } = "Bekliyor";
         public string? Note { get; set; }
+        public string? RejectionReason { get; set; }
         public int RequestedByUserId { get; set; }
         public int? RespondedByUserId { get; set; }
         public DateTime? ScheduledAt { get; set; }

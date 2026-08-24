@@ -17,10 +17,29 @@ namespace NotificationService.Controllers
             _context = context;
         }
 
+        private string? CurrentRole =>
+            User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+
+        private int CurrentBranchId
+        {
+            get
+            {
+                int.TryParse(User.FindFirst("branchId")?.Value, out int branchId);
+                return branchId;
+            }
+        }
+
+        // Kullanici yalnizca kendi subesinin bildirimlerine erisebilir.
+        private bool SubeyeErisebilir(int branchId) =>
+            CurrentRole == "Admin" || branchId == CurrentBranchId;
+
         // Şubeye ait bildirimleri listele
         [HttpGet("{branchId}")]
         public async Task<IActionResult> GetByBranch(int branchId)
         {
+            if (!SubeyeErisebilir(branchId))
+                return Forbid();
+
             var notifications = await _context.Notifications
                 .Where(n => n.BranchId == branchId)
                 .OrderByDescending(n => n.CreatedAt)
@@ -46,6 +65,9 @@ namespace NotificationService.Controllers
             if (notification == null)
                 return NotFound(new { message = "Bildirim bulunamadı." });
 
+            if (!SubeyeErisebilir(notification.BranchId))
+                return Forbid();
+
             notification.IsRead = true;
             await _context.SaveChangesAsync();
 
@@ -56,6 +78,9 @@ namespace NotificationService.Controllers
         [HttpGet("{branchId}/unread-count")]
         public async Task<IActionResult> GetUnreadCount(int branchId)
         {
+            if (!SubeyeErisebilir(branchId))
+                return Forbid();
+
             var count = await _context.Notifications
                 .CountAsync(n => n.BranchId == branchId && !n.IsRead);
 
