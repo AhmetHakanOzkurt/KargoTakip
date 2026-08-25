@@ -16,7 +16,6 @@ namespace OrderService.Controllers
     public class OrderController : ControllerBase
     {
         private readonly KargoTakipDbContext _context;
-        private readonly RabbitMqProducer _producer;
         private readonly ILogger<OrderController> _logger;
         private readonly IValidator<CreateShipmentRequest> _validator;
         private readonly IValidator<UpdateStatusRequest> _statusValidator;
@@ -24,14 +23,12 @@ namespace OrderService.Controllers
 
         public OrderController(
             KargoTakipDbContext context,
-            RabbitMqProducer producer,
             ILogger<OrderController> logger,
             IValidator<CreateShipmentRequest> validator,
             IValidator<UpdateStatusRequest> statusValidator,
             IHttpClientFactory httpClientFactory)
         {
             _context = context;
-            _producer = producer;
             _logger = logger;
             _validator = validator;
             _statusValidator = statusValidator;
@@ -250,7 +247,6 @@ namespace OrderService.Controllers
             };
 
             _context.ShipmentStatusHistories.Add(statusHistory);
-            await _context.SaveChangesAsync();
 
             var durumuGuncellendiEvent = new KargoDurumuGuncellendiEvent
             {
@@ -265,7 +261,10 @@ namespace OrderService.Controllers
                 DeliveryCode = shipment.DeliveryCode
             };
 
-            await _producer.PublishAsync("kargo_durumu_guncellendi", durumuGuncellendiEvent);
+            // Event, is verisiyle ayni SaveChanges icinde yazilir;
+            // boylece durum degisti ama bildirim gitmedi durumu olusamaz.
+            _context.EventEkle("kargo_durumu_guncellendi", durumuGuncellendiEvent);
+            await _context.SaveChangesAsync();
 
             return Ok(new
             {
@@ -331,7 +330,7 @@ namespace OrderService.Controllers
             foreach (var planId in planIds)
             {
                 var plan = await _context.ConsolidationPlans.FindAsync(planId);
-                if (plan == null || plan.Status == "Tamamlandı")
+                if (plan == null || ConsolidationPlanStatus.TerminalMi(plan.Status))
                     continue;
 
                 // Bu metot SaveChanges'ten ONCE calisir; sorgu DB'yi okudugu icin
@@ -346,7 +345,7 @@ namespace OrderService.Controllers
 
                 if (!kalanVar)
                 {
-                    plan.Status = "Tamamlandı";
+                    plan.Status = ConsolidationPlanStatus.Tamamlandi;
                     _logger.LogInformation(
                         "Konsolidasyon plani {PlanId} tamamlandi.", planId);
                 }
@@ -428,7 +427,6 @@ namespace OrderService.Controllers
             };
 
             _context.ShipmentStatusHistories.Add(statusHistory);
-            await _context.SaveChangesAsync();
 
             var durumuGuncellendiEvent = new KargoDurumuGuncellendiEvent
             {
@@ -443,7 +441,10 @@ namespace OrderService.Controllers
                 DeliveryCode = shipment.DeliveryCode
             };
 
-            await _producer.PublishAsync("kargo_durumu_guncellendi", durumuGuncellendiEvent);
+            // Event, is verisiyle ayni SaveChanges icinde yazilir;
+            // boylece durum degisti ama bildirim gitmedi durumu olusamaz.
+            _context.EventEkle("kargo_durumu_guncellendi", durumuGuncellendiEvent);
+            await _context.SaveChangesAsync();
 
             _logger.LogInformation("Kargo teslim edildi: {TrackingCode}", shipment.TrackingCode);
 
@@ -559,7 +560,33 @@ namespace OrderService.Controllers
 
             _context.Shipments.Add(shipment);
             _context.ShipmentStatusHistories.Add(statusHistory);
-            await _context.SaveChangesAsync();
+
+            // Event govdesi SaveChanges ile uretilen ShipmentId'ye ihtiyac duyar;
+            // kargo ile event acik bir transaction'da tek atomik islem olur.
+            // EnableRetryOnFailure acik oldugu icin transaction, EF'in
+            // execution strategy'si uzerinden calistirilmalidir; aksi halde
+            // "does not support user-initiated transactions" hatasi alinir.
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
+            {
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+
+                await _context.SaveChangesAsync();
+
+                _context.EventEkle("kargo_olusturuldu", new KargoOlusturulduEvent
+                {
+                    ShipmentId = shipment.Id,
+                    TrackingCode = shipment.TrackingCode,
+                    ReceiverName = shipment.ReceiverName,
+                    ReceiverEmail = shipment.ReceiverEmail,
+                    CurrentStatus = shipment.CurrentStatus,
+                    BranchId = shipment.BranchId,
+                    OlusturulmaTarihi = shipment.CreatedAt
+                });
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
+            });
 
             _logger.LogInformation("Kargo oluşturuldu: {TrackingCode}", shipment.TrackingCode);
 
@@ -606,19 +633,6 @@ namespace OrderService.Controllers
                 _logger.LogWarning(ex,
                     "Araç atama isteği başarısız: {TrackingCode}", shipment.TrackingCode);
             }
-
-            var kargoEvent = new KargoOlusturulduEvent
-            {
-                ShipmentId = shipment.Id,
-                TrackingCode = shipment.TrackingCode,
-                ReceiverName = shipment.ReceiverName,
-                ReceiverEmail = shipment.ReceiverEmail,
-                CurrentStatus = shipment.CurrentStatus,
-                BranchId = shipment.BranchId,
-                OlusturulmaTarihi = shipment.CreatedAt
-            };
-
-            await _producer.PublishAsync("kargo_olusturuldu", kargoEvent);
 
             return CreatedAtAction(nameof(GetById), new { id = shipment.Id }, new
             {

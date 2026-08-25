@@ -16,15 +16,6 @@ namespace NotificationService.Messaging
         private readonly IConfiguration _configuration;
         private readonly EmailService _emailService;
         private readonly ILogger<RabbitMqConsumer> _logger;
-        private const string DeadLetterExchange = "kargo_dlx";
-        private const string DeadLetterSuffix = ".dlq";
-
-        private static readonly string[] Kuyruklar =
-        {
-            "kargo_olusturuldu",
-            "kargo_durumu_guncellendi"
-        };
-
         private IConnection? _connection;
         private IChannel? _channel;
 
@@ -72,16 +63,16 @@ namespace NotificationService.Messaging
 
             // Islenemeyen mesajlar sonsuz requeue yerine dead-letter kuyruguna gider.
             await _channel.ExchangeDeclareAsync(
-                exchange: DeadLetterExchange,
+                exchange: KuyrukTopolojisi.DeadLetterExchange,
                 type: ExchangeType.Direct,
                 durable: true,
                 autoDelete: false,
                 cancellationToken: stoppingToken
             );
 
-            foreach (var kuyruk in Kuyruklar)
+            foreach (var kuyruk in KuyrukTopolojisi.TuketilenKuyruklar)
             {
-                var dlq = kuyruk + DeadLetterSuffix;
+                var dlq = KuyrukTopolojisi.DlqAdi(kuyruk);
 
                 await _channel.QueueDeclareAsync(
                     queue: dlq,
@@ -94,7 +85,7 @@ namespace NotificationService.Messaging
 
                 await _channel.QueueBindAsync(
                     queue: dlq,
-                    exchange: DeadLetterExchange,
+                    exchange: KuyrukTopolojisi.DeadLetterExchange,
                     routingKey: dlq,
                     cancellationToken: stoppingToken
                 );
@@ -104,11 +95,7 @@ namespace NotificationService.Messaging
                     durable: true,
                     exclusive: false,
                     autoDelete: false,
-                    arguments: new Dictionary<string, object?>
-                    {
-                        ["x-dead-letter-exchange"] = DeadLetterExchange,
-                        ["x-dead-letter-routing-key"] = dlq
-                    },
+                    arguments: KuyrukTopolojisi.Argumanlar(kuyruk),
                     cancellationToken: stoppingToken
                 );
             }

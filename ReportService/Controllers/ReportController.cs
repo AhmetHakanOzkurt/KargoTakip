@@ -12,10 +12,14 @@ namespace ReportService.Controllers
     public class ReportController : ControllerBase
     {
         private readonly KargoTakipDbContext _context;
+        private readonly KargoTakip.ServiceDefaults.YerelZaman _yerelZaman;
 
-        public ReportController(KargoTakipDbContext context)
+        public ReportController(
+            KargoTakipDbContext context,
+            KargoTakip.ServiceDefaults.YerelZaman yerelZaman)
         {
             _context = context;
+            _yerelZaman = yerelZaman;
         }
 
         private string? CurrentRole =>
@@ -204,8 +208,10 @@ namespace ReportService.Controllers
         [HttpGet("daily")]
         public async Task<IActionResult> GetDailyReport()
         {
-            var bugun = DateTime.UtcNow.Date;
-            var yarin = bugun.AddDays(1);
+            // Gun siniri yerel saat diliminde hesaplanir; UtcNow.Date ile
+            // gunun ilk 3 saati onceki gune dusuyordu.
+            var bugun = _yerelZaman.BugunBaslangicUtc();
+            var yarin = _yerelZaman.BugunBitisUtc();
 
             var bugunOlusturulan = await Kargolar()
                 .CountAsync(s => s.CreatedAt >= bugun && s.CreatedAt < yarin);
@@ -223,7 +229,8 @@ namespace ReportService.Controllers
 
             return Ok(new
             {
-                tarih = bugun.ToString("yyyy-MM-dd"),
+                tarih = _yerelZaman.BugunYerelTarih(),
+                saatDilimi = _yerelZaman.SaatDilimiAdi,
                 bugunOlusturulan,
                 bugunTeslimEdilen,
                 bugunYolda,

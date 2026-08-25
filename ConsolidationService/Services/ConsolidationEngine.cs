@@ -39,6 +39,37 @@ namespace ConsolidationService.Services
             {
                 await ProcessBranchAsync(branch);
             }
+
+            await PlanDurumlariniIlerletAsync();
+        }
+
+        /// <summary>
+        /// Planlanan kalkis saati gelen planlari yola cikmis olarak isaretler.
+        /// Onceden plan "Planlandi"dan dogrudan "Tamamlandi"ya geciyor,
+        /// ActualDepartureAt ise hic yazilmiyordu.
+        /// </summary>
+        private async Task PlanDurumlariniIlerletAsync()
+        {
+            var simdi = DateTime.UtcNow;
+
+            var kalkacakPlanlar = await _context.ConsolidationPlans
+                .Where(p => p.Status == ConsolidationPlanStatus.Planlandi &&
+                            p.PlannedDepartureAt <= simdi)
+                .ToListAsync();
+
+            if (kalkacakPlanlar.Count == 0)
+                return;
+
+            foreach (var plan in kalkacakPlanlar)
+            {
+                plan.Status = ConsolidationPlanStatus.Yolda;
+                plan.ActualDepartureAt = simdi;
+
+                _logger.LogInformation(
+                    "Konsolidasyon plani {PlanId} yola cikti.", plan.Id);
+            }
+
+            await _context.SaveChangesAsync();
         }
 
         private async Task ProcessBranchAsync(Branch branch)
@@ -220,7 +251,7 @@ namespace ConsolidationService.Services
                 VehicleId = vehicle.Id,
                 OriginBranchId = branch.Id,
                 DestinationCityId = destinationCityId,
-                Status = "Planlandı",
+                Status = ConsolidationPlanStatus.Planlandi,
                 PlannedDepartureAt = DateTime.UtcNow.AddHours(2),
                 TotalCapacity = totalCapacity,
                 UsedCapacity = usedCapacity,

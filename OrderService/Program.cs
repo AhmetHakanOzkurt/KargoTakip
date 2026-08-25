@@ -38,6 +38,9 @@ builder.Services.AddSingleton(sp =>
     return new OrderService.Messaging.RabbitMqProducer(hostName, logger);
 });
 
+// Outbox tablosundaki event'leri kuyruga aktarir.
+builder.Services.AddHostedService<OrderService.Messaging.OutboxYayinlayici>();
+
 var app = builder.Build();
 
 app.UseKargoServiceDefaults();

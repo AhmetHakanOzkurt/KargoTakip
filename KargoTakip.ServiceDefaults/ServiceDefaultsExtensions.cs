@@ -53,6 +53,7 @@ namespace KargoTakip.ServiceDefaults
                         System.Text.Json.Serialization.ReferenceHandler.IgnoreCycles;
                 });
 
+            builder.Services.AddSingleton<YerelZaman>();
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddKargoSwagger(serviceTitle);
             builder.Services.AddKargoDbContext(builder.Configuration);
@@ -191,27 +192,36 @@ namespace KargoTakip.ServiceDefaults
 
         private static void KargoMigrasyonlariUygula(this WebApplication app)
         {
+            // Alti servis birden Migrate() cagirdiginda eszamanli baslangicta
+            // migration catismasi oluyordu. Production'da yalnizca
+            // Database__RunMigrations=true olan servis (auth-service) uygular.
+            var migrationCalistir = app.Configuration
+                .GetValue<bool?>("Database:RunMigrations")
+                ?? app.Environment.IsDevelopment();
+
+            if (!migrationCalistir)
+                return;
+
             using var scope = app.Services.CreateScope();
+            var logger = scope.ServiceProvider
+                .GetRequiredService<ILogger<ExceptionHandlingMiddleware>>();
+
             try
             {
-                // Alti servis birden Migrate() cagirdiginda eszamanli baslangicta
-                // migration catismasi oluyordu. Production'da yalnizca
-                // Database__RunMigrations=true olan servis (auth-service) uygular.
-                var migrationCalistir = app.Configuration
-                    .GetValue<bool?>("Database:RunMigrations")
-                    ?? app.Environment.IsDevelopment();
-
-                if (!migrationCalistir)
-                    return;
-
                 var db = scope.ServiceProvider.GetRequiredService<KargoTakipDbContext>();
                 db.Database.Migrate();
             }
             catch (Exception ex)
             {
-                var logger = scope.ServiceProvider
-                    .GetRequiredService<ILogger<ExceptionHandlingMiddleware>>();
-                logger.LogError(ex, "Migration sirasinda hata olustu, devam ediliyor.");
+                // Onceden hata loglanip devam ediliyordu. Sonuc: SQL Server
+                // acilista hazir degilse veya migration veri yuzunden
+                // basarisiz olursa servis ESKI semayla saglikli gorunuyor,
+                // sorun ancak calisma aninda "Invalid object name" olarak
+                // ortaya cikiyordu. Artik hizli basarisiz olunur; konteyner
+                // restart politikasi yeniden dener.
+                logger.LogCritical(ex,
+                    "Migration uygulanamadi, servis baslatilmiyor.");
+                throw;
             }
         }
     }

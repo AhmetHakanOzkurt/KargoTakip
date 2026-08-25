@@ -185,7 +185,9 @@ namespace VehicleService.Controllers
                     MesgulArac = b.Vehicles.Count(v => !v.IsAvailable),
                     ToplamKapasite = b.Vehicles.Sum(v => v.Capacity),
                     ToplamYuk = b.Vehicles.Sum(v => v.CurrentLoad),
-                    DolulukOrani = b.Vehicles.Any()
+                    // Any() yeterli degildi: tum araclarin kapasitesi 0 ise
+                    // Sum(Capacity) sifir olup SQL'de sifira bolme hatasi olusuyordu.
+                    DolulukOrani = b.Vehicles.Sum(v => v.Capacity) > 0
                         ? (int)Math.Round(
                             (double)b.Vehicles.Sum(v => v.CurrentLoad) /
                             b.Vehicles.Sum(v => v.Capacity) * 100)

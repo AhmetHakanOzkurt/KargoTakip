@@ -22,6 +22,7 @@
     <ProjectReference Include="..\OrderService\OrderService.csproj" />
     <ProjectReference Include="..\ConsolidationService\ConsolidationService.csproj" />
     <ProjectReference Include="..\AuthService\AuthService.csproj" />
+    <ProjectReference Include="..\KargoTakip.ServiceDefaults\KargoTakip.ServiceDefaults.csproj" />
   </ItemGroup>
 
 </Project>

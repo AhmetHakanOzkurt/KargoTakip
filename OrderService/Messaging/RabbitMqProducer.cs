@@ -1,3 +1,4 @@
+﻿using KargoTakip.Infrastructure.Messaging;
 using RabbitMQ.Client;
 using System.Text;
 using System.Text.Json;
@@ -52,7 +53,14 @@ namespace OrderService.Messaging
             return _channel;
         }
 
-        public async Task PublishAsync(string queueName, object message)
+        public Task PublishAsync(string queueName, object message) =>
+            PublishRawAsync(queueName, JsonSerializer.Serialize(message));
+
+        /// <summary>
+        /// Onceden serilestirilmis govdeyi yayinlar. Outbox kayitlari zaten
+        /// JSON tuttugu icin tekrar serilestirilmelerine gerek yoktur.
+        /// </summary>
+        public async Task PublishRawAsync(string queueName, string json)
         {
             await _gate.WaitAsync();
             try
@@ -61,16 +69,38 @@ namespace OrderService.Messaging
 
                 if (_bildirilenKuyruklar.Add(queueName))
                 {
+                    // Argumanlar tuketiciyle birebir ayni olmali; farkli olursa
+                    // RabbitMQ PRECONDITION_FAILED ile publish'i reddeder.
+                    await channel.ExchangeDeclareAsync(
+                        exchange: KuyrukTopolojisi.DeadLetterExchange,
+                        type: ExchangeType.Direct,
+                        durable: true,
+                        autoDelete: false
+                    );
+
                     await channel.QueueDeclareAsync(
-                        queue: queueName,
+                        queue: KuyrukTopolojisi.DlqAdi(queueName),
                         durable: true,
                         exclusive: false,
                         autoDelete: false,
                         arguments: null
                     );
+
+                    await channel.QueueBindAsync(
+                        queue: KuyrukTopolojisi.DlqAdi(queueName),
+                        exchange: KuyrukTopolojisi.DeadLetterExchange,
+                        routingKey: KuyrukTopolojisi.DlqAdi(queueName)
+                    );
+
+                    await channel.QueueDeclareAsync(
+                        queue: queueName,
+                        durable: true,
+                        exclusive: false,
+                        autoDelete: false,
+                        arguments: KuyrukTopolojisi.Argumanlar(queueName)
+                    );
                 }
 
-                var json = JsonSerializer.Serialize(message);
                 var body = Encoding.UTF8.GetBytes(json);
 
                 var properties = new BasicProperties

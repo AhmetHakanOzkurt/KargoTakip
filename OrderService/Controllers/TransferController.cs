@@ -1,4 +1,5 @@
 ﻿using KargoTakip.Infrastructure.Data;
+using OrderService.Messaging;
 using KargoTakip.Infrastructure.Models;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -12,16 +13,13 @@ namespace OrderService.Controllers
     public class TransferController : ControllerBase
     {
         private readonly KargoTakipDbContext _context;
-        private readonly OrderService.Messaging.RabbitMqProducer _producer;
         private readonly ILogger<TransferController> _logger;
 
         public TransferController(
             KargoTakipDbContext context,
-            OrderService.Messaging.RabbitMqProducer producer,
             ILogger<TransferController> logger)
         {
             _context = context;
-            _producer = producer;
             _logger = logger;
         }
 
@@ -97,15 +95,28 @@ namespace OrderService.Controllers
             };
 
             _context.Notifications.Add(notification);
-            await _context.SaveChangesAsync();
 
-            // RabbitMQ'ya event yayınla
-            await _producer.PublishAsync("transfer_talebi_olusturuldu", new
+            // Event govdesi SaveChanges ile uretilen Id'ye ihtiyac duydugu icin
+            // iki kayit acik bir transaction ile tek atomik islemde birlesir.
+            // EnableRetryOnFailure acik oldugundan EF'in execution strategy'si
+            // kullanilmalidir.
+            var strategy = _context.Database.CreateExecutionStrategy();
+            await strategy.ExecuteAsync(async () =>
             {
-                TransferRequestId = transferRequest.Id,
-                RequesterBranchId = request.RequesterBranchId,
-                TargetBranchId = request.TargetBranchId,
-                KargoSayisi = shipmentIds.Count
+                await using var transaction = await _context.Database.BeginTransactionAsync();
+
+                await _context.SaveChangesAsync();
+
+                _context.EventEkle("transfer_talebi_olusturuldu", new
+                {
+                    TransferRequestId = transferRequest.Id,
+                    RequesterBranchId = request.RequesterBranchId,
+                    TargetBranchId = request.TargetBranchId,
+                    KargoSayisi = shipmentIds.Count
+                });
+
+                await _context.SaveChangesAsync();
+                await transaction.CommitAsync();
             });
 
             _logger.LogInformation(
@@ -297,14 +308,16 @@ namespace OrderService.Controllers
             };
 
             _context.Notifications.Add(notification);
-            await _context.SaveChangesAsync();
 
-            await _producer.PublishAsync("transfer_talebi_onaylandi", new
+            // Event, is verisiyle ayni SaveChanges icinde yazilir.
+            _context.EventEkle("transfer_talebi_onaylandi", new
             {
                 TransferRequestId = transfer.Id,
                 ScheduledAt = request.ScheduledAt,
                 KargoSayisi = shipmentIds.Count
             });
+
+            await _context.SaveChangesAsync();
 
             _logger.LogInformation(
                 "Transfer talebi onaylandı: {Id}", transfer.Id);
@@ -365,13 +378,15 @@ namespace OrderService.Controllers
             };
 
             _context.Notifications.Add(notification);
-            await _context.SaveChangesAsync();
 
-            await _producer.PublishAsync("transfer_talebi_reddedildi", new
+            // Event, is verisiyle ayni SaveChanges icinde yazilir.
+            _context.EventEkle("transfer_talebi_reddedildi", new
             {
                 TransferRequestId = transfer.Id,
                 Reason = request.Reason
             });
+
+            await _context.SaveChangesAsync();
 
             _logger.LogInformation(
                 "Transfer talebi reddedildi: {Id}", transfer.Id);

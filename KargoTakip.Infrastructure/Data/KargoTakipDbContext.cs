@@ -26,6 +26,7 @@ namespace KargoTakip.Infrastructure.Data
         public DbSet<CityDistance> CityDistances { get; set; }
         public DbSet<ConsolidationPlan> ConsolidationPlans { get; set; }
         public DbSet<ConsolidationPlanItem> ConsolidationPlanItems { get; set; }
+        public DbSet<OutboxMessage> OutboxMessages { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -104,6 +105,16 @@ namespace KargoTakip.Infrastructure.Data
             modelBuilder.Entity<ConsolidationPlanItem>(e =>
             {
                 e.Property(x => x.AddedReason).HasMaxLength(50).IsRequired();
+            });
+
+            modelBuilder.Entity<OutboxMessage>(e =>
+            {
+                e.Property(x => x.QueueName).HasMaxLength(100).IsRequired();
+                e.Property(x => x.Payload).IsRequired();
+                e.Property(x => x.LastError).HasMaxLength(1000);
+
+                // Yayinlayici yalnizca islenmemis kayitlari sirayla okur.
+                e.HasIndex(x => new { x.ProcessedAt, x.Id });
             });
 
             // Uygulama katmanindaki kontroller yarisa aciktir; benzersizlik

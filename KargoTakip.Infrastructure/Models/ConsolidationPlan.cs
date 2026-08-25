@@ -12,7 +12,7 @@ namespace KargoTakip.Infrastructure.Models
         public int VehicleId { get; set; }
         public int OriginBranchId { get; set; }
         public int DestinationCityId { get; set; }
-        public string Status { get; set; } = "Planlandı";
+        public string Status { get; set; } = ConsolidationPlanStatus.Planlandi;
         public DateTime PlannedDepartureAt { get; set; }
         public DateTime? ActualDepartureAt { get; set; }
         public int TotalCapacity { get; set; }
