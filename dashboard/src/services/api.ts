@@ -83,8 +83,11 @@ export const getDailyReport = () =>
   axios.get(`${REPORT_URL}/api/reports/daily`, authHeader());
 
 // Consolidation
-export const getConsolidationPlans = () =>
-  axios.get(`${CONSOLIDATION_URL}/api/consolidation/plans`, authHeader());
+export const getConsolidationPlans = (sayfa = 1, sayfaBoyutu = 50) =>
+  axios.get(
+    `${CONSOLIDATION_URL}/api/consolidation/plans?sayfa=${sayfa}&sayfaBoyutu=${sayfaBoyutu}`,
+    authHeader()
+  );
 
 export const getConsolidationSavings = () =>
   axios.get(`${CONSOLIDATION_URL}/api/consolidation/savings`, authHeader());

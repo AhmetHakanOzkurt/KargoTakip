@@ -38,6 +38,9 @@ namespace OrderService.Controllers
             _httpClientFactory = httpClientFactory;
         }
 
+        private const int MaksTeslimatDenemesi = 5;
+        private static readonly TimeSpan TeslimatKilitSuresi = TimeSpan.FromMinutes(30);
+
         // Token'daki kimlik bilgileri — istemciden gelen degerlere guvenilmez.
         private string? CurrentRole =>
             User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
@@ -219,6 +222,8 @@ namespace OrderService.Controllers
                 shipment.DeliveryCode = GenerateDeliveryCode();
                 shipment.DeliveryCodeExpiry = DateTime.UtcNow.AddHours(24);
                 shipment.DeliveryCodeUsed = false;
+                shipment.DeliveryCodeFailedAttempts = 0;
+                shipment.DeliveryCodeLockedUntil = null;
             }
 
             // Teslim edilince kodu kullanıldı işaretle
@@ -370,11 +375,44 @@ namespace OrderService.Controllers
             if (shipment.DeliveryCodeExpiry < DateTime.UtcNow)
                 return BadRequest(new { message = "Teslimat kodunun süresi dolmuş." });
 
+            if (shipment.DeliveryCodeLockedUntil > DateTime.UtcNow)
+                return StatusCode(StatusCodes.Status429TooManyRequests, new
+                {
+                    message = "Çok fazla hatalı deneme yapıldı. " +
+                              "Kod geçici olarak kilitlendi, yeni kod oluşturulmalı."
+                });
+
             if (shipment.DeliveryCode != request.DeliveryCode)
-                return BadRequest(new { message = "Teslimat kodu hatalı." });
+            {
+                // Sabit zamanli karsilastirma gerekmez; kod tek kullanimlik ve
+                // deneme sayisi sinirli. Onemli olan brute-force'u durdurmak.
+                shipment.DeliveryCodeFailedAttempts++;
+
+                if (shipment.DeliveryCodeFailedAttempts >= MaksTeslimatDenemesi)
+                {
+                    shipment.DeliveryCodeLockedUntil =
+                        DateTime.UtcNow.Add(TeslimatKilitSuresi);
+
+                    _logger.LogWarning(
+                        "Teslimat kodu {Attempts} hatali denemeden sonra kilitlendi: {TrackingCode}",
+                        shipment.DeliveryCodeFailedAttempts, shipment.TrackingCode);
+                }
+
+                await _context.SaveChangesAsync();
+
+                var kalan = MaksTeslimatDenemesi - shipment.DeliveryCodeFailedAttempts;
+                return BadRequest(new
+                {
+                    message = kalan > 0
+                        ? $"Teslimat kodu hatalı. Kalan deneme hakkı: {kalan}."
+                        : "Teslimat kodu hatalı. Kod kilitlendi."
+                });
+            }
 
             shipment.CurrentStatus = ShipmentStatus.TeslimEdildi;
             shipment.DeliveryCodeUsed = true;
+            shipment.DeliveryCodeFailedAttempts = 0;
+            shipment.DeliveryCodeLockedUntil = null;
             shipment.UpdatedAt = DateTime.UtcNow;
 
             await AracYukunuSerbestBirakAsync(shipment);

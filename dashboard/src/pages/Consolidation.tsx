@@ -19,7 +19,7 @@ export default function Consolidation() {
         getConsolidationPlans(),
         getConsolidationSavings()
       ]);
-      setPlans(plansRes.data);
+      setPlans(plansRes.data.kayitlar);
       setSavings(savingsRes.data);
     } catch (err) {
       console.error(err);

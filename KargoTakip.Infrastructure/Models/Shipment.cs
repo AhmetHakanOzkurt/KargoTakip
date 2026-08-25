@@ -28,6 +28,11 @@ namespace KargoTakip.Infrastructure.Models
         public DateTime? DeliveryCodeExpiry { get; set; }
         public bool DeliveryCodeUsed { get; set; } = false;
 
+        // 6 haneli teslimat kodu sinirsiz denenebiliyordu. Hatali deneme
+        // sayilir, esik asilinca kod kilitlenir ve yeniden uretilmesi gerekir.
+        public int DeliveryCodeFailedAttempts { get; set; } = 0;
+        public DateTime? DeliveryCodeLockedUntil { get; set; }
+
         public City ReceiverCity { get; set; } = null!;
         public Branch Branch { get; set; } = null!;
         public Vehicle? AssignedVehicle { get; set; }

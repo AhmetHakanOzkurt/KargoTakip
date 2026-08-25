@@ -22,8 +22,10 @@ namespace ConsolidationService.Controllers
             _engine = engine;
         }
 
-        // Manuel tetikleme — test ve sunum için
+        // Manuel tetikleme — test ve sunum için.
+        // Tum subeleri tarayan agir bir islem; her kullanici tetikleyememeli.
         [HttpPost("run")]
+        [Authorize(Roles = "Admin,BranchManager")]
         public async Task<IActionResult> RunNow()
         {
             await _engine.RunAsync();
@@ -32,13 +34,24 @@ namespace ConsolidationService.Controllers
 
         // Tüm planları listele
         [HttpGet("plans")]
-        public async Task<IActionResult> GetPlans()
+        public async Task<IActionResult> GetPlans(
+            [FromQuery] int? sayfa, [FromQuery] int? sayfaBoyutu)
         {
+            // Diger listeleme uclarina sayfalama eklenirken burasi atlanmisti.
+            var aktifSayfa = sayfa.GetValueOrDefault(1) < 1 ? 1 : sayfa.GetValueOrDefault(1);
+            var boyut = sayfaBoyutu.GetValueOrDefault(50);
+            boyut = boyut < 1 ? 50 : (boyut > 200 ? 200 : boyut);
+
+            var toplamKayit = await _context.ConsolidationPlans.CountAsync();
+
             var plans = await _context.ConsolidationPlans
                 .Include(p => p.Vehicle)
                 .Include(p => p.OriginBranch)
                 .Include(p => p.DestinationCity)
                 .Include(p => p.Items)
+                .OrderByDescending(p => p.CreatedAt)
+                .Skip((aktifSayfa - 1) * boyut)
+                .Take(boyut)
                 .Select(p => new
                 {
                     p.Id,
@@ -55,10 +68,15 @@ namespace ConsolidationService.Controllers
                     p.ActualDepartureAt,
                     p.CreatedAt
                 })
-                .OrderByDescending(p => p.CreatedAt)
                 .ToListAsync();
 
-            return Ok(plans);
+            return Ok(new
+            {
+                toplamKayit,
+                sayfa = aktifSayfa,
+                sayfaBoyutu = boyut,
+                kayitlar = plans
+            });
         }
 
         // Plan detayı

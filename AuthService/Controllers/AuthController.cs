@@ -18,17 +18,20 @@ namespace AuthService.Controllers
         private readonly IConfiguration _configuration;
         private readonly ILogger<AuthController> _logger;
         private readonly IValidator<LoginRequest> _validator;
+        private readonly IValidator<CreateUserRequest> _createUserValidator;
 
         public AuthController(
             KargoTakipDbContext context,
             IConfiguration configuration,
             ILogger<AuthController> logger,
-            IValidator<LoginRequest> validator)
+            IValidator<LoginRequest> validator,
+            IValidator<CreateUserRequest> createUserValidator)
         {
             _context = context;
             _configuration = configuration;
             _logger = logger;
             _validator = validator;
+            _createUserValidator = createUserValidator;
         }
 
         [HttpPost("users")]
@@ -38,6 +41,11 @@ namespace AuthService.Controllers
             var role = User.FindFirst(ClaimTypes.Role)?.Value;
             if (role != "Admin")
                 return Forbid();
+
+            var validationResult = await _createUserValidator.ValidateAsync(request);
+            if (!validationResult.IsValid)
+                return BadRequest(validationResult.Errors
+                    .Select(e => new { field = e.PropertyName, message = e.ErrorMessage }));
 
             var exists = await _context.Users.AnyAsync(u => u.Username == request.Username);
             if (exists)
