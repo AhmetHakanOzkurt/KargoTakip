@@ -37,7 +37,9 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          # package-lock.json npm 11 (Node 24) ile uretildi; Node 20'nin
+          # npm 10'u ayni agaci cozemedigi icin "npm ci" senkron degil diyordu.
+          node-version: '24'
           cache: npm
           cache-dependency-path: dashboard/package-lock.json
 

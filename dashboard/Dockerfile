@@ -1,7 +1,8 @@
-FROM node:20-alpine AS build
+FROM node:24-alpine AS build
 WORKDIR /app
 COPY package*.json ./
-RUN npm install
+# npm install yerine npm ci: lockfile'a birebir sadik, tekrarlanabilir kurulum
+RUN npm ci
 COPY . .
 
 # CRA ortam degiskenlerini BUILD sirasinda bundle'a gomer; compose'daki
