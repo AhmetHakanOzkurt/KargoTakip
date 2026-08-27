@@ -10,6 +10,87 @@ namespace KargoTakip.Infrastructure.Migrations
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.Sql(@"
+-- Bu migration metin kolonlarini nvarchar(max) -> nvarchar(n) olarak
+-- daraltir. Sinirdan uzun veri varsa ALTER COLUMN anlasilmaz bir hata ile
+-- durur. Asagidaki on kontrol, hangi tablo ve kolonun soruna yol actigini
+-- acikca bildirerek migration'i basta durdurur.
+DECLARE @ihlaller TABLE (
+    TabloAdi sysname, KolonAdi sysname, SinirDegeri int, IhlalSayisi int);
+
+INSERT INTO @ihlaller (TabloAdi, KolonAdi, SinirDegeri, IhlalSayisi)
+                SELECT 'VehicleTypes','RouteType',30,COUNT(*) FROM [VehicleTypes] WHERE DATALENGTH([RouteType]) / 2 > 30
+                UNION ALL
+                SELECT 'VehicleTypes','Name',50,COUNT(*) FROM [VehicleTypes] WHERE DATALENGTH([Name]) / 2 > 50
+                UNION ALL
+                SELECT 'Vehicles','PlateNumber',20,COUNT(*) FROM [Vehicles] WHERE DATALENGTH([PlateNumber]) / 2 > 20
+                UNION ALL
+                SELECT 'Users','Username',50,COUNT(*) FROM [Users] WHERE DATALENGTH([Username]) / 2 > 50
+                UNION ALL
+                SELECT 'Users','Role',20,COUNT(*) FROM [Users] WHERE DATALENGTH([Role]) / 2 > 20
+                UNION ALL
+                SELECT 'Users','PasswordHash',255,COUNT(*) FROM [Users] WHERE DATALENGTH([PasswordHash]) / 2 > 255
+                UNION ALL
+                SELECT 'Users','FullName',100,COUNT(*) FROM [Users] WHERE DATALENGTH([FullName]) / 2 > 100
+                UNION ALL
+                SELECT 'TransferRequests','Status',20,COUNT(*) FROM [TransferRequests] WHERE DATALENGTH([Status]) / 2 > 20
+                UNION ALL
+                SELECT 'TransferRequests','Note',500,COUNT(*) FROM [TransferRequests] WHERE DATALENGTH([Note]) / 2 > 500
+                UNION ALL
+                SELECT 'ShipmentStatusHistories','Status',30,COUNT(*) FROM [ShipmentStatusHistories] WHERE DATALENGTH([Status]) / 2 > 30
+                UNION ALL
+                SELECT 'ShipmentStatusHistories','ServiceSource',50,COUNT(*) FROM [ShipmentStatusHistories] WHERE DATALENGTH([ServiceSource]) / 2 > 50
+                UNION ALL
+                SELECT 'ShipmentStatusHistories','Note',500,COUNT(*) FROM [ShipmentStatusHistories] WHERE DATALENGTH([Note]) / 2 > 500
+                UNION ALL
+                SELECT 'Shipments','TrackingCode',32,COUNT(*) FROM [Shipments] WHERE DATALENGTH([TrackingCode]) / 2 > 32
+                UNION ALL
+                SELECT 'Shipments','SenderName',100,COUNT(*) FROM [Shipments] WHERE DATALENGTH([SenderName]) / 2 > 100
+                UNION ALL
+                SELECT 'Shipments','ReceiverName',100,COUNT(*) FROM [Shipments] WHERE DATALENGTH([ReceiverName]) / 2 > 100
+                UNION ALL
+                SELECT 'Shipments','ReceiverEmail',256,COUNT(*) FROM [Shipments] WHERE DATALENGTH([ReceiverEmail]) / 2 > 256
+                UNION ALL
+                SELECT 'Shipments','ReceiverAddress',255,COUNT(*) FROM [Shipments] WHERE DATALENGTH([ReceiverAddress]) / 2 > 255
+                UNION ALL
+                SELECT 'Shipments','Priority',20,COUNT(*) FROM [Shipments] WHERE DATALENGTH([Priority]) / 2 > 20
+                UNION ALL
+                SELECT 'Shipments','DeliveryCode',10,COUNT(*) FROM [Shipments] WHERE DATALENGTH([DeliveryCode]) / 2 > 10
+                UNION ALL
+                SELECT 'Shipments','CurrentStatus',30,COUNT(*) FROM [Shipments] WHERE DATALENGTH([CurrentStatus]) / 2 > 30
+                UNION ALL
+                SELECT 'Notifications','Message',500,COUNT(*) FROM [Notifications] WHERE DATALENGTH([Message]) / 2 > 500
+                UNION ALL
+                SELECT 'ConsolidationPlans','Status',30,COUNT(*) FROM [ConsolidationPlans] WHERE DATALENGTH([Status]) / 2 > 30
+                UNION ALL
+                SELECT 'ConsolidationPlanItems','AddedReason',50,COUNT(*) FROM [ConsolidationPlanItems] WHERE DATALENGTH([AddedReason]) / 2 > 50
+                UNION ALL
+                SELECT 'Cities','Region',50,COUNT(*) FROM [Cities] WHERE DATALENGTH([Region]) / 2 > 50
+                UNION ALL
+                SELECT 'Cities','Name',100,COUNT(*) FROM [Cities] WHERE DATALENGTH([Name]) / 2 > 100
+                UNION ALL
+                SELECT 'Branches','Name',100,COUNT(*) FROM [Branches] WHERE DATALENGTH([Name]) / 2 > 100
+                UNION ALL
+                SELECT 'Branches','Address',255,COUNT(*) FROM [Branches] WHERE DATALENGTH([Address]) / 2 > 255;
+
+DELETE FROM @ihlaller WHERE IhlalSayisi = 0;
+
+IF EXISTS (SELECT 1 FROM @ihlaller)
+BEGIN
+    DECLARE @detay nvarchar(2000) = (
+        SELECT STRING_AGG(
+            CONCAT(TabloAdi, '.', KolonAdi, ' (sinir ', SinirDegeri,
+                   ', asan kayit: ', IhlalSayisi, ')'), '; ')
+        FROM @ihlaller);
+
+    DECLARE @mesaj nvarchar(3000) =
+        CONCAT('Migration durduruldu: asagidaki kolonlarda sinir degerini ',
+               'asan veri var. Once veriyi kisaltin veya duzeltin. -> ', @detay);
+
+    THROW 51000, @mesaj, 1;
+END
+");
+
             migrationBuilder.DropIndex(
                 name: "IX_Shipments_BranchId",
                 table: "Shipments");
