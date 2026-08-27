@@ -14,19 +14,14 @@ builder.Services.AddValidatorsFromAssemblyContaining<OrderService.Validators.Cre
 // istekte yeni HttpClient olusturulmaz.
 builder.Services.AddHttpClient("vehicle-service", client =>
 {
+    // Sertifika dogrulamasini devre disi birakan handler kaldirildi.
+    // Docker'da bu adres http://vehicle-service:8080 olarak verilir;
+    // yerelde VehicleService'in HTTP portu kullanilir. Boylece self-signed
+    // sertifika sorunu hic olusmaz ve TLS dogrulamasi her ortamda acik kalir.
     var baseUrl = builder.Configuration["VehicleService:BaseUrl"]
-        ?? "https://localhost:7139";
+        ?? "http://localhost:5193";
     client.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
     client.Timeout = TimeSpan.FromSeconds(10);
-})
-.ConfigurePrimaryHttpMessageHandler(() =>
-{
-    var handler = new HttpClientHandler();
-    // Self-signed localhost sertifikasi sadece gelistirmede kabul edilir.
-    if (builder.Environment.IsDevelopment())
-        handler.ServerCertificateCustomValidationCallback =
-            HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
-    return handler;
 });
 
 // Kalici RabbitMQ baglantisi tutar; singleton olmasi zorunludur.
