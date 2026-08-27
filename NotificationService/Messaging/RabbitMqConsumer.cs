@@ -113,7 +113,7 @@ namespace NotificationService.Messaging
                     if (ev != null)
                         await HandleKargoOlusturuldu(ev);
 
-                    await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                    await _channel.BasicAckAsync(ea.DeliveryTag, false, stoppingToken);
                 }
                 catch (Exception ex)
                 {
@@ -121,7 +121,7 @@ namespace NotificationService.Messaging
                     // bozuk bir mesaj kuyrugu sonsuz donguye sokuyordu.
                     _logger.LogError(ex,
                         "Mesaj islenemedi, DLQ'ya aktariliyor. Govde: {Body}", message);
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
+                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false, stoppingToken);
                 }
             };
 
@@ -145,7 +145,7 @@ namespace NotificationService.Messaging
                     if (ev != null)
                         await HandleKargoDurumuGuncellendi(ev);
 
-                    await _channel.BasicAckAsync(ea.DeliveryTag, false);
+                    await _channel.BasicAckAsync(ea.DeliveryTag, false, stoppingToken);
                 }
                 catch (Exception ex)
                 {
@@ -153,7 +153,7 @@ namespace NotificationService.Messaging
                     // bozuk bir mesaj kuyrugu sonsuz donguye sokuyordu.
                     _logger.LogError(ex,
                         "Mesaj islenemedi, DLQ'ya aktariliyor. Govde: {Body}", message);
-                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false);
+                    await _channel.BasicNackAsync(ea.DeliveryTag, false, false, stoppingToken);
                 }
             };
 

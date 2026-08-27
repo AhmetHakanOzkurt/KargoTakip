@@ -53,7 +53,9 @@ namespace KargoTakip.ServiceDefaults
                 detail = _environment.IsDevelopment() ? exception.Message : null
             };
 
-            await context.Response.WriteAsync(JsonSerializer.Serialize(response));
+            // Istemci baglantiyi kesmisse yazma islemi de iptal edilebilmeli.
+            await context.Response.WriteAsync(
+                JsonSerializer.Serialize(response), context.RequestAborted);
         }
     }
 }

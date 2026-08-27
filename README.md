@@ -243,6 +243,19 @@ Startup projesi olarak servislerden biri kullanılamaz; yalnızca
 `KargoTakip.Infrastructure` `Microsoft.EntityFrameworkCore.Tools`
 paketine ve design-time `KargoTakipDbContextFactory` sınıfına sahiptir.
 
+Bağlantı dizesi koda gömülü değildir; `KargoTakipDbContextFactory`
+`ConnectionStrings__DefaultConnection` ortam değişkenini okur, tanımlı
+değilse şifre içermeyen yerel varsayılana (`.\SQLEXPRESS`,
+Windows kimlik doğrulaması) düşer. Docker'daki veritabanına karşı
+çalıştırmak için:
+
+```bash
+ConnectionStrings__DefaultConnection="Server=localhost,1433;Database=KargoTakipDB;User Id=sa;Password=$DB_PASSWORD;TrustServerCertificate=True;" dotnet ef migrations add <Ad> --project KargoTakip.Infrastructure --startup-project KargoTakip.Infrastructure
+```
+
+Bu durumda SQL Server portunun geçici olarak yayınlanmış olması gerekir;
+`docker-compose.yml` 1433'ü dışarıya açmaz.
+
 Production'da migration'ları yalnızca `auth-service` uygular
 (`Database__RunMigrations=true`); diğer servisler onun sağlıklı olmasını
 bekler.
