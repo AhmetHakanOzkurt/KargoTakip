@@ -44,7 +44,10 @@ jobs:
           cache-dependency-path: dashboard/package-lock.json
 
       - name: Install
-        run: npm ci
+        # --ignore-scripts: paket kurulumu sirasinda lifecycle script'lerinin
+        # calismasini engeller (tedarik zinciri riski). Projede postinstall
+        # gerektiren bagimlilik yok.
+        run: npm ci --ignore-scripts
 
       - name: Build
         # CI=true uyarilari hataya cevirir; bundle build'de kirilmasin diye

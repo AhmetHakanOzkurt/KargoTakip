@@ -222,7 +222,7 @@ services:
         REACT_APP_API_BASE: "${REACT_APP_API_BASE-}"
     restart: unless-stopped
     ports:
-      - "3000:80"
+      - "3000:8080"
     networks:
       - kargo-network
 
@@ -282,6 +282,10 @@ services:
     environment:
       - VPS_API_URL=${VPS_API_URL}
       - UPDATER_SECRET=${UPDATER_SECRET}
+    # Konteyner root degil; docker.sock'a erisim icin host'taki docker
+    # grubunun GID'si gerekir: `stat -c %g /var/run/docker.sock`
+    group_add:
+      - "${DOCKER_GID:-999}"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - ./tunnel_log.txt:/app/tunnel_log.txt

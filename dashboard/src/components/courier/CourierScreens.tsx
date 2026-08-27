@@ -1,3 +1,5 @@
+import { tiklanabilirKart } from '../tiklanabilir';
+
 export function ErrorBox({ message }: { message: string }) {
   return (
     <div style={{
@@ -98,7 +100,7 @@ function KargoKarti({ shipment, onSelect }: { shipment: any; onSelect: (s: any) 
 
   return (
     <div
-      onClick={() => onSelect(shipment)}
+      {...tiklanabilirKart(() => onSelect(shipment))}
       style={{
         background: 'white', borderRadius: '12px', padding: '16px',
         cursor: 'pointer', boxShadow: '0 2px 8px rgba(0,0,0,0.06)',

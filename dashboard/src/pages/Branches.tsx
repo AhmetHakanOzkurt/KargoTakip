@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getBranchSummary } from '../services/api';
 import { BranchSummary } from '../types';
+import { tiklanabilirKart } from '../components/tiklanabilir';
 import { getOrders } from '../services/api';
 
 export default function Branches() {
@@ -44,7 +45,8 @@ export default function Branches() {
           {branches.map(b => (
             <div
               key={b.subeId}
-              onClick={() => setSelectedBranch(selectedBranch?.subeId === b.subeId ? null : b)}
+              {...tiklanabilirKart(() =>
+                setSelectedBranch(selectedBranch?.subeId === b.subeId ? null : b))}
               style={{
                 background: 'white', borderRadius: '12px', padding: '20px',
                 boxShadow: '0 2px 8px rgba(0,0,0,0.06)', cursor: 'pointer',

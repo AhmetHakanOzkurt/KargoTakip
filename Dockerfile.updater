@@ -6,4 +6,12 @@ RUN apk update && apk add --no-cache curl tar && \
     rm -rf docker docker.tgz
 WORKDIR /app
 COPY update_vps.ps1 /app/update_vps.ps1
+
+# Imaj varsayilan olarak root calisiyordu. Ayricaliksiz bir kullaniciya
+# gecilir. Konteyner /var/run/docker.sock'a erisebilmek icin host'taki
+# docker grubunun GID'sine ihtiyac duyar; bu deger docker-compose.yml
+# icinde group_add ile verilir (DOCKER_GID).
+RUN adduser -D -u 10001 updater && chown -R updater:updater /app
+USER updater
+
 CMD ["pwsh", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "/app/update_vps.ps1"]
